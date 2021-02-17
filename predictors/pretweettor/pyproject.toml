@@ -1,11 +1,15 @@
 [tool.poetry]
-name = "data-fetcher"
+name = "pretweettor"
 version = "0.1.0"
-description = "Fetches relevant data for the machine learning algos"
-authors = ["Daniel Lavin"]
+description = ""
+authors = ["Daniel Lavin <dlavinv64@hotmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
+pandas = "^1.2.2"
+vaderSentiment = "^3.3.2"
+langdetect = "^1.0.8"
+nltk = "^3.5"
 
 [tool.poetry.dev-dependencies]
 
