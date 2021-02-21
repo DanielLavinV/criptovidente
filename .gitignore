@@ -1,2 +1,7 @@
 *.csv
 *.txt
+*.pyc
+
+__pycache__
+
+clients/binance-client/binance_client/keys.json
