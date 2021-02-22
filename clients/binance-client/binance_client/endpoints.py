@@ -3,7 +3,7 @@ from constants import SECURITY_TYPES, SECURITY_TYPE_NONE, SECURITY_TYPE_USER_DAT
 endpoints_config = {
 
     "system_status": {
-        "path": "/wapi/v3/systemStatus",
+        "path": "/wapi/v3/systemStatus.html",
         "method": "GET",
         "security": SECURITY_TYPES[SECURITY_TYPE_NONE],
         "weight": 0
@@ -21,6 +21,5 @@ endpoints_config = {
         "method": "GET",
         "security": SECURITY_TYPES[SECURITY_TYPE_USER_DATA],
         "weight": 1
-        }
     },
 }
