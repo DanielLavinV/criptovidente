@@ -6,7 +6,7 @@ import math
 from signatures import sign
 from endpoints import endpoints_config
 import logging
-from typing import Optional
+from typing import Optional, List
 from abc import ABC
 
 
@@ -15,7 +15,8 @@ logger.setLevel(logging.DEBUG)
 
 
 class BaseClient:
-    def __init__(self, keys_file: str):
+    def __init__(self, keys_file: str, client_name: str):
+        self.endpoints_config = endpoints_config[client_name]
         with open(keys_file) as f:
             keys = json.load(f)
             self._api_key = keys["API_KEY"]
@@ -23,7 +24,7 @@ class BaseClient:
         self._session = Session()
 
     def _forge_request_and_send(self, endpoint: str, params: dict) -> Request:
-        cfg = endpoints_config[endpoint]
+        cfg = self.endpoints_config[endpoint]
         url = self._forge_url(cfg)
         method = cfg["method"]
         security_headers, params = self._check_security(cfg, params)
@@ -70,7 +71,7 @@ class BaseClient:
 
 class WalletClient(BaseClient):
     def __init__(self, keys_file):
-        super().__init__(keys_file)
+        super().__init__(keys_file, client_name="wallet")
 
     def system_status(self) -> dict:
         return self._forge_request_and_send("system_status", {})
@@ -332,6 +333,118 @@ class WalletClient(BaseClient):
     ):
         logger.info("Endpoint is not implemented.")
 
+class MarketDataClient(BaseClient):
+    def __init__(self, keys_file):
+        super().__init__(keys_file, "market_data")
+
+    def test_connectivity(
+        self
+    ) -> dict:
+        return self._forge_request_and_send("test_connectivity", params={})
+
+    def check_server_time(
+        self
+    ) -> dict:
+        return self._forge_request_and_send("check_server_time", params={})
+
+    def exchange_information(
+        self
+    ) -> dict:
+        return self._forge_request_and_send("exchange_information", params={})
+
+    def order_book(
+        self,
+        symbol: str,
+        limit: Optional[int] = None
+    ) -> dict:
+        params = {"symbol": symbol}
+        params = self._resolve_optional_arguments(params, limit=limit)
+        return self._forge_request_and_send("order_book", params)
+
+    def recent_trades_list(
+        self,
+        symbol: str,
+        limit: Optional[int] = None
+    ) -> dict:
+        params = {"symbol": symbol}
+        params = self._resolve_optional_arguments(params, limit=limit)
+        return self._forge_request_and_send("recent_trades_list", params)
+
+    def old_trade_lookup(
+        self,
+        symbol: str,
+        limit: Optional[int] = None,
+        from_id: Optional[int] = None
+    ) -> dict:
+        params = {"symbol": symbol}
+        params = self._resolve_optional_arguments(params, limit=limit, fromId=from_id)
+        return self._forge_request_and_send("old_trade_lookup", params)
+
+    def compressed_aggregate_trades_list(
+        self,
+        symbol: str,
+        from_id: Optional[int] = None,
+        start_time: Optional[int] = None,
+        end_time: Optional[int] = None,
+        limit: Optional[int] = None
+    ) -> dict:
+        params = {"symbol": symbol}
+        params = self._resolve_optional_arguments(
+            params,
+            limit=limit,
+            fromId=from_id,
+            startTime=start_time,
+            endTime=end_time,
+            )
+        return self._forge_request_and_send("compressed_aggregate_trades_list", params)
+
+    def kline_candlestick_data(
+        self,
+        symbol: str,
+        interval: str,
+        start_time: Optional[int],
+        end_time: Optional[int],
+        limit: Optional[int]
+    ) -> dict:
+        params = {"symbol": symbol, "interval": interval}
+        params = self._resolve_optional_arguments(
+            params,
+            limit=limit,
+            startTime=start_time,
+            endTime=end_time,
+            )
+        return self._forge_request_and_send("kline_candlestick_data", params)
+
+    def current_average_price(
+        self,
+        symbol: str
+    ) -> dict:
+        params = {"symbol": symbol}
+        return self._forge_request_and_send("current_average_price", params)
+
+    def twentyfourhour_ticker_price_change_statistics(
+        self,
+        symbol: str
+    ) -> dict:
+        params = {"symbol": symbol}
+        return self._forge_request_and_send("twentyfourhour_ticker_price_change_statistics", params)
+
+    def symbol_price_ticker(
+        self,
+        symbol: str
+    ) -> dict:
+        params = {"symbol": symbol}
+        return self._forge_request_and_send("symbol_price_ticker", params)
+
+    def symbol_order_book_ticker(
+        self,
+        symbol: str
+    ) -> dict:
+        params = {"symbol": symbol}
+        return self._forge_request_and_send("symbol_order_book_ticker", params)
+
+
 class BinanceClient(BaseClient):
     def __init__(self, keys_file):
         self.wallet = WalletClient(keys_file)
+        self.market_data = MarketDataClient(keys_file)
