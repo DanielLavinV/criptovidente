@@ -1,4 +1,5 @@
 BASE_ENDPOINT = "https://api.binance.com"
+WEBSOCKET_BASE_ENDPOINT = "wss://stream.binance.com:9443"
 FALLBACK_ENDPOINTS = ["https://api1.binance.com", "https://api2.binance.com", "https://api3.binance.com"]
 
 KLINE_INTERVAL_MINUTES_1 = "1m"
