@@ -1,3 +1,4 @@
+# flake8: noqa
 from client import BinanceClient
 import signatures
 import logging
@@ -19,4 +20,4 @@ res = client.market_data.exchange_information()
 symbols = res["content"]["symbols"]
 with open("symbols.py", "w+") as f:
     for s in symbols:
-        f.write(f'SYMBOL_{s["symbol"]}: \"{s["symbol"]}\"\n')
+        f.write(f'SYMBOL_{s["symbol"]}: "{s["symbol"]}"\n')

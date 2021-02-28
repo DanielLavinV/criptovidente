@@ -42,7 +42,11 @@ class TweetCleaner:
             if "BOT" in row["user"] or "bot" in row["user"] or "Bot" in row["user"]:
                 drop_idxs.append(idx)
                 continue
-            if "BOT" in row["fullname"] or "bot" in row["fullname"] or "Bot" in row["fullname"]:
+            if (
+                "BOT" in row["fullname"]
+                or "bot" in row["fullname"]
+                or "Bot" in row["fullname"]
+            ):
                 drop_idxs.append(idx)
                 continue
             # Remove nonenglish tweets
@@ -55,10 +59,13 @@ class TweetCleaner:
             df.to_csv(of, sep=";")
 
     def remove_unwanted_cols(self, input_f: str, output_f: str, cols: List[str]):
-        df = pd.read_csv(input_f, index_col=0, sep=";", engine="python", error_bad_lines=False)
+        df = pd.read_csv(
+            input_f, index_col=0, sep=";", engine="python", error_bad_lines=False
+        )
         df = df.drop(columns=cols)
         with open(output_f, "w+") as of:
             df.to_csv(of, sep=";")
+
 
 # no_false_separator_tweets.csv is in my L drive
 # clean_tweets("no_false_separator_tweets.csv", "tweets.csv")

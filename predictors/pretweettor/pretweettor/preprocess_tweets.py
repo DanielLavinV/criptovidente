@@ -14,17 +14,19 @@ from langdetect import detect
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
 
+
 def url_removal(df):
     for idx, row in df.iterrows():
         text = row["text"]
         text = text.replace("pic.twitter", "http://pic.twitter")
         text = text.replace("https", "http")
         text = text.replace("http:", " http:")
-        text = re.sub(r"http\S+", '', text, flags=re.MULTILINE)
-        text = re.sub(' +', ' ', text)
+        text = re.sub(r"http\S+", "", text, flags=re.MULTILINE)
+        text = re.sub(" +", " ", text)
         text = text.replace("\n", " ")
         row["text"] = text
     return df
+
 
 def noise_removal(df):
     special_chars = string.punctuation
@@ -32,16 +34,19 @@ def noise_removal(df):
         row["text"] = row["text"].translate({ord(i): None for i in special_chars})
     return df
 
+
 def lowercasing(df):
     for idx, row in df.iterrows():
         row["text"] = row["text"].lower()
     return df
+
 
 def number_removal(df):
     special_chars = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
     for idx, row in df.iterrows():
         row["text"] = row["text"].translate({ord(i): None for i in special_chars})
     return df
+
 
 # Will also remove words shorter than 2 letters
 def stop_words_removal(df):
@@ -52,14 +57,37 @@ def stop_words_removal(df):
         row["text"] = " ".join(words)
     return df
 
+
 def ticker_symbol_removal(df):
-    ticker_symbols = ["xbt", "btc", "eth", "ltc", "xrp", "bch", "usd", "eur", "dbix", "bnb", "bat", "xlm", "ada", "trx",
-    "gbp", "aud", "nzd", "cny", "chf", "mxn", "icx"]
+    ticker_symbols = [
+        "xbt",
+        "btc",
+        "eth",
+        "ltc",
+        "xrp",
+        "bch",
+        "usd",
+        "eur",
+        "dbix",
+        "bnb",
+        "bat",
+        "xlm",
+        "ada",
+        "trx",
+        "gbp",
+        "aud",
+        "nzd",
+        "cny",
+        "chf",
+        "mxn",
+        "icx",
+    ]
     for idx, row in df.iterrows():
         words = row["text"].split(" ")
         cleaned = [w for w in words if w not in ticker_symbols]
         row["text"] = " ".join(cleaned)
     return df
+
 
 def remove_nonenglish(df):
     drop_idxs = []
@@ -76,6 +104,7 @@ def remove_nonenglish(df):
     df = df.drop(index=drop_idxs)
     return df
 
+
 def null_removal(df):
     drop_idxs = []
     for idx, row in df.iterrows():
@@ -83,6 +112,7 @@ def null_removal(df):
             drop_idxs.append(idx)
     df = df.drop(index=drop_idxs)
     return df
+
 
 def short_entries_removal(df):
     drop_idxs = []
@@ -92,11 +122,12 @@ def short_entries_removal(df):
     df = df.drop(index=drop_idxs)
     return df
 
+
 def perform_lemmatization(df):
     lemmatizer = WordNetLemmatizer()
     for idx, row in df.iterrows():
-        if idx%10000 == 0:
-            print(idx, end=' ')
+        if idx % 10000 == 0:
+            print(idx, end=" ")
         text = row["text"]
         if "’" in text:
             text = text.replace("’", "'")
@@ -110,7 +141,6 @@ def perform_lemmatization(df):
             lemmatized_words.append(lemmatizer.lemmatize(word))
         row["text"] = " ".join(lemmatized_words)
     return df
-
 
 
 # with open("./../data/clean_tweets.csv") as f, open("preprocessed_tweets.csv", "w+") as of:

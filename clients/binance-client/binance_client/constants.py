@@ -1,6 +1,10 @@
 BASE_ENDPOINT = "https://api.binance.com"
 WEBSOCKET_BASE_ENDPOINT = "wss://stream.binance.com:9443"
-FALLBACK_ENDPOINTS = ["https://api1.binance.com", "https://api2.binance.com", "https://api3.binance.com"]
+FALLBACK_ENDPOINTS = [
+    "https://api1.binance.com",
+    "https://api2.binance.com",
+    "https://api3.binance.com",
+]
 
 KLINE_INTERVAL_MINUTES_1 = "1m"
 KLINE_INTERVAL_MINUTES_3 = "3m"
@@ -45,7 +49,7 @@ FILTER_TYPE_EXCHANGE_MAX_NUM_ALGO_ORDERS = "EXCHANGE_MAX_NUM_ALGO_ORDERS"
 ORDER_STATUS_NEW = "NEW"
 ORDER_STATUS_PARTIALLY_FILLED = "PARTIALLY_FILLED"
 ORDER_STATUS_FILLED = "FILLED"
-ORDER_STATUS_CANCELLED = "CANCELED" # NOT A TYPO
+ORDER_STATUS_CANCELLED = "CANCELED"  # NOT A TYPO
 ORDER_STATUS_PENDING_CANCEL = "PENDING_CANCEL"
 ORDER_STATUS_REJECTED = "REJECTED"
 ORDER_STATUS_EXPIRED = "EXPIRED"
@@ -101,28 +105,10 @@ SECURITY_TYPE_USER_STREAM = "USER_STREAM"
 SECURITY_TYPE_MARKET_DATA = "MARKET_DATA"
 
 SECURITY_TYPES = {
-    SECURITY_TYPE_NONE: {
-        "requires_api_key": False,
-        "requires_signature": False,
-    },
-    SECURITY_TYPE_TRADE: {
-        "requires_api_key": True,
-        "requires_signature": True,
-    },
-    SECURITY_TYPE_MARGIN: {
-        "requires_api_key": True,
-        "requires_signature": True,
-    },
-    SECURITY_TYPE_USER_DATA: {
-        "requires_api_key": True,
-        "requires_signature": True,
-    },
-    SECURITY_TYPE_USER_STREAM: {
-        "requires_api_key": True,
-        "requires_signature": False,
-    },
-    SECURITY_TYPE_MARKET_DATA: {
-        "requires_api_key": True,
-        "requires_signature": False,
-    }
+    SECURITY_TYPE_NONE: {"requires_api_key": False, "requires_signature": False},
+    SECURITY_TYPE_TRADE: {"requires_api_key": True, "requires_signature": True},
+    SECURITY_TYPE_MARGIN: {"requires_api_key": True, "requires_signature": True},
+    SECURITY_TYPE_USER_DATA: {"requires_api_key": True, "requires_signature": True},
+    SECURITY_TYPE_USER_STREAM: {"requires_api_key": True, "requires_signature": False},
+    SECURITY_TYPE_MARKET_DATA: {"requires_api_key": True, "requires_signature": False},
 }

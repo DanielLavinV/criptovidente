@@ -1,19 +1,19 @@
 import asyncio
 import websockets
-import ssl
 import threading
-#import orjson as json
+
+# import orjson as json
 import json
 from typing import List, Callable, Any
 from constants import WEBSOCKET_BASE_ENDPOINT
-import concurrent.futures as cf
-import time
+
 
 class BinanceStreamClient(threading.Thread):
-    def __init__(self,
-    streams: List[str],
-    on_message: Callable[[Any], Any],
-    how_many: str = "single"
+    def __init__(
+        self,
+        streams: List[str],
+        on_message: Callable[[Any], Any],
+        how_many: str = "single",
     ):
         threading.Thread.__init__(self)
         self._how_many = how_many
@@ -23,9 +23,7 @@ class BinanceStreamClient(threading.Thread):
         self._event_loop = asyncio.new_event_loop()
 
     async def connect_and_subscribe(self):
-        async with websockets.connect(
-        self._build_connection_string(), ssl=True
-        ) as ws:
+        async with websockets.connect(self._build_connection_string(), ssl=True) as ws:
             await ws.send(self._build_subscription_string())
             while not self._should_terminate:
                 try:
@@ -42,11 +40,14 @@ class BinanceStreamClient(threading.Thread):
         if len(self._streams) == 1:
             con_string = f"{WEBSOCKET_BASE_ENDPOINT}/ws/{self._streams[0]}"
         else:
-            con_string = f"{WEBSOCKET_BASE_ENDPOINT}/stream?streams={'/'.join(self._streams)}"
+            con_string = (
+                f"{WEBSOCKET_BASE_ENDPOINT}/stream?streams={'/'.join(self._streams)}"
+            )
         return con_string
 
     def _build_subscription_string(self):
-        return (json.dumps({"method": "SUBSCRIBE", "params": self._streams, "id": 1}))
+        return json.dumps({"method": "SUBSCRIBE", "params": self._streams, "id": 1})
+
 
 # def something(msg):
 #     print(msg)
