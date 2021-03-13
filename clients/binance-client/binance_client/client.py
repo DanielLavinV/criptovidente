@@ -7,20 +7,27 @@ from signatures import sign
 from endpoints import endpoints_config
 import logging
 from typing import Optional, List
-
+import time
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
 class BaseClient:
-    def __init__(self, keys_file: str, client_name: str):
+    def __init__(
+        self, keys_file: str, client_name: str, weight_manager, test_net: bool = False
+    ):
         self.endpoints_config = endpoints_config[client_name]
         with open(keys_file) as f:
             keys = json.load(f)
             self._api_key = keys["API_KEY"]
             self._secret_key = keys["SECRET_KEY"]
         self._session = Session()
+        self._test_net = test_net
+        self._base_url = (
+            constants.BASE_ENDPOINT if not test_net else constants.BASE_TEST_ENDPOINT
+        )
+        self._weight_manager = weight_manager
 
     def _forge_request_and_send(self, endpoint: str, params: dict) -> Request:
         cfg = self.endpoints_config[endpoint]
@@ -50,7 +57,15 @@ class BaseClient:
         return int(math.floor(dtt.now().timestamp() * 1000))
 
     def _forge_url(self, endpoint_config: dict) -> str:
-        return constants.BASE_ENDPOINT + endpoint_config["path"]
+        return (
+            self._base_url + endpoint_config["path"]
+            if not self._test_net
+            else self._base_url
+            + endpoint_config["path"]
+            .replace("wapi", "api")
+            .replace("sapi", "api")
+            .replace("v1", "v3")
+        )
 
     def _resolve_optional_arguments(self, params: dict, **kwargs) -> dict:
         for arg, val in kwargs.items():
@@ -61,13 +76,39 @@ class BaseClient:
     def _send(self, req: Request) -> dict:
         logger.info(f"Reaching {req.url}")
         response = self._session.send(req.prepare())
+        if self._parse_weight_response(response):
+            return self._send(req)
         result = {"http_code": response.status_code, "content": response.json()}
         return result
 
+    def _parse_weight_response(self, response):
+        code = response.status_code
+        if code == 429 or code == 418:
+            logger.info(f"HTTP {code} received: {constants.HTTP_RESPONSE_CODES[code]}")
+            sleep_time = int(response.headers["Retry-After"])
+            time.sleep(sleep_time)
+            return True
+        # TODO: implement weight management
+        else:
+            weight = 0
+            for h in response.headers:
+                if "used-weight-" in h:
+                    weight = int(response.headers[h])
+                    break
+            else:
+                return
+            # print(f"Header {header}: {weight}")
+            self._weight_manager(method="update", weight=weight)
+
 
 class WalletClient(BaseClient):
-    def __init__(self, keys_file):
-        super().__init__(keys_file, client_name="wallet")
+    def __init__(self, keys_file: str, weight_manager, test_net: bool = False):
+        super().__init__(
+            keys_file=keys_file,
+            client_name="wallet",
+            weight_manager=weight_manager,
+            test_net=test_net,
+        )
 
     def system_status(self) -> dict:
         return self._forge_request_and_send("system_status", {})
@@ -313,8 +354,13 @@ class WalletClient(BaseClient):
 
 
 class MarketDataClient(BaseClient):
-    def __init__(self, keys_file):
-        super().__init__(keys_file, "market_data")
+    def __init__(self, keys_file: str, weight_manager, test_net: bool = False):
+        super().__init__(
+            keys_file=keys_file,
+            client_name="market_data",
+            weight_manager=weight_manager,
+            test_net=test_net,
+        )
 
     def test_connectivity(self) -> dict:
         return self._forge_request_and_send("test_connectivity", params={})
@@ -390,8 +436,13 @@ class MarketDataClient(BaseClient):
 
 
 class SpotAccountTradeClient(BaseClient):
-    def __init__(self, keys_file):
-        super().__init__(keys_file, "spot_account_trade")
+    def __init__(self, keys_file: str, weight_manager, test_net: bool = False):
+        super().__init__(
+            keys_file=keys_file,
+            client_name="spot_account_trade",
+            weight_manager=weight_manager,
+            test_net=test_net,
+        )
 
     def test_new_order(
         self,
@@ -654,8 +705,13 @@ class SpotAccountTradeClient(BaseClient):
 
 
 class UserDataClient(BaseClient):
-    def __init__(self, keys):
-        super().__init__(keys, "user_data")
+    def __init__(self, keys_file: str, weight_manager, test_net: bool = False):
+        super().__init__(
+            keys_file=keys_file,
+            client_name="user_data",
+            weight_manager=weight_manager,
+            test_net=test_net,
+        )
 
     def create_listen_key(self) -> dict:
         return self._forge_request_and_send("create_listen_key", params={})
@@ -670,8 +726,39 @@ class UserDataClient(BaseClient):
 
 
 class BinanceClient(BaseClient):
-    def __init__(self, keys_file):
-        self.wallet = WalletClient(keys_file)
-        self.market_data = MarketDataClient(keys_file)
-        self.spot_account_trade = SpotAccountTradeClient(keys_file)
-        self.user_data = UserDataClient(keys_file)
+    def __init__(self, keys_file: str, test_net: bool = False):
+        logger.info("Initializing Binance Client...")
+        self.wallet = WalletClient(
+            keys_file=keys_file, weight_manager=self._weight_manager, test_net=test_net
+        )
+        self.market_data = MarketDataClient(
+            keys_file=keys_file, weight_manager=self._weight_manager, test_net=test_net
+        )
+        self.spot_account_trade = SpotAccountTradeClient(
+            keys_file=keys_file, weight_manager=self._weight_manager, test_net=test_net
+        )
+        self.user_data = UserDataClient(
+            keys_file=keys_file, weight_manager=self._weight_manager, test_net=test_net
+        )
+        self._request_weight_limit = 3000000  # only for initialization
+        self._order_limit = 0  # unused
+        self.update_rate_limits()
+        logger.info("Client is ready to go!")
+
+    def update_rate_limits(self):
+        res = self.market_data.exchange_information()
+        for limit in res["content"]["rateLimits"]:
+            if limit["rateLimitType"] == constants.RATE_LIMIT_TYPE_REQUEST_WEIGHT:
+                self._weight_manager(method="set_limit", weight=limit["limit"])
+
+    # Currently only tracks the "REQUEST_WEIGHT" limit, not "ORDERS" nor "RAW_REQUESTS"
+    # TODO: make sure you update weight limits at least once every 1000 requests
+    def _weight_manager(self, method: str, **kwargs):
+        if method == "set_limit":
+            self._request_weight_limit = kwargs["weight"]
+        if method == "update":
+            self._used_weight = kwargs["weight"]
+        if self._used_weight > self._request_weight_limit * 0.9:
+            print("Used weight reaching limit. Taking a rest...")
+            time.sleep(30)
+        print(f"Used weight: {self._used_weight}, limit: {self._request_weight_limit}")

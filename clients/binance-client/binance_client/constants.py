@@ -1,4 +1,5 @@
 BASE_ENDPOINT = "https://api.binance.com"
+BASE_TEST_ENDPOINT = "https://testnet.binance.vision"
 WEBSOCKET_BASE_ENDPOINT = "wss://stream.binance.com:9443"
 FALLBACK_ENDPOINTS = [
     "https://api1.binance.com",

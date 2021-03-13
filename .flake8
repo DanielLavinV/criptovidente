@@ -1,5 +1,5 @@
 [flake8]
-ignore = F841
+ignore = F841, W503
 max-complexity = 15
 max-line-length = 120
 exclude = data-fetchers/*,predictors/*
