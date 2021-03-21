@@ -33,9 +33,9 @@ class SGDPredictor:
         for pair_csv in os.listdir(self._train_data_path):
             pair_path = self._train_data_path + pair_csv
             df = pd.read_csv(pair_path, sep=",", names=["ts", "price", "vol"])
-            df["datetime"] = pd.to_datetime(df["ts"], unit="s").dt.tz_localize(
-                TIMEZONE, ambiguous=True, nonexistent="shift_forward"
-            )
+            df["datetime"] = pd.to_datetime(df["ts"], unit="s")  # .dt.tz_localize(
+            #     TIMEZONE, ambiguous=True, nonexistent="shift_forward"
+            # )
             df = df.set_index("datetime")
             if df.empty:
                 continue
@@ -73,9 +73,11 @@ class SGDPredictor:
 
     def predict(self, df_test: pd.DataFrame, max_price: float, max_vol: float):
         logger.info(f"Predicting for {df_test.shape[0]} datapoints.")
-        df_test["datetime"] = pd.to_datetime(df_test["ts"], unit="s").dt.tz_localize(
-            TIMEZONE, ambiguous=True, nonexistent="shift_forward"
-        )
+        df_test["datetime"] = pd.to_datetime(
+            df_test["ts"], unit="s"
+        )  # .dt.tz_localize(
+        #     TIMEZONE, ambiguous=True, nonexistent="shift_forward"
+        # )
         df_test = df_test.set_index("datetime")
         ts_df = df_test[["ts"]].resample(self._batch_size).mean()
         price_df = df_test[["price"]].resample(self._batch_size).mean().fillna(0)
@@ -106,12 +108,14 @@ class SGDPredictor:
         logger.info("Calculating prediction error...")
         actual["datetime"] = pd.to_datetime(actual["ts"], unit="s").dt.tz_localize(
             TIMEZONE, ambiguous=True, nonexistent="shift_forward"
-        )
+        )  # .dt.tz_convert(TIMEZONE)
         actual = actual.set_index("datetime").resample(self._batch_size).mean()
         pred["datetime"] = pd.to_datetime(pred["ts"], unit="s").dt.tz_localize(
             TIMEZONE, ambiguous=True, nonexistent="shift_forward"
-        )
+        )  # .dt.tz_convert(TIMEZONE)
         pred = pred.set_index("datetime").resample(self._batch_size).mean()
+        logger.info(f"ACTUAL: {actual.head(30)}")
+        logger.info(f"PRED: {pred.head(30)}")
         joint = pd.merge(
             actual, pred, how="inner", right_index=True, left_index=True
         ).dropna()
