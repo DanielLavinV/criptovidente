@@ -1,12 +1,10 @@
 from binance_client.client import BinanceClient
 from binance_client.stream import BinanceStreamClient
 import binance_client.constants as cts
-from animation import Animator
 from crypto_predictors.sgd import SGDPredictor
 import pandas as pd
 import numpy as np
 import threading
-from multiprocessing import Process
 import time
 from datetime import datetime as dtt
 from datetime import timedelta
@@ -15,6 +13,7 @@ import json
 from math import floor
 import logging
 
+pd.set_option("display.float_format", "{:.10f}".format)
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -174,25 +173,12 @@ class Bitsurfer(threading.Thread):
     def run(self):
         self._acquire_targets()
         self.create_streams()
-        self._create_animator()
         schedule.every(self._ops_frequency).minutes.do(self._run_prediction)
         schedule.every(30).minutes.do(self._acquire_targets)
         schedule.every(self._get_old_periods()).minutes.do(self._drop_old_entries)
         while not self._should_terminate:
             schedule.run_pending()
             time.sleep(1)
-
-    def _create_animator(self):
-        self._animator = Animator(
-            pred_df=self._prediction_results_df,
-            actual_df=self._trades_df,
-            animation_interval=self._ops_frequency * 60,
-            number_of_plots=len(self._pairs),
-            pairs=self._pairs,
-            ops_freq=self._ops_frequency,
-        )
-        p = Process(target=self._animator.run)
-        p.join()
 
     def _acquire_targets(self, ignore_list=[]):
         def get_max_pair_prices():
@@ -263,5 +249,3 @@ class Bitsurfer(threading.Thread):
 if __name__ == "__main__":
     b = Bitsurfer()
     b.start()
-    # time.sleep(*60)
-    # b.stop()

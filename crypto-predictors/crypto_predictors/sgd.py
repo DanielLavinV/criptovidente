@@ -34,8 +34,6 @@ class SGDPredictor:
             df = pd.read_csv(pair_path, sep=",", names=["ts", "price", "vol"])
             df["datetime"] = pd.to_datetime(df["ts"], unit="s")
             df = df.set_index("datetime")
-            # df_test = df[df.index >= stop]
-            # df = df[df.index < stop]
             if df.empty:
                 continue
             ts_df = df[["ts"]].resample(self._batch_size).mean()
