@@ -1,16 +1,17 @@
 import pandas as pd
-
-pd.options.mode.chained_assignment = None
 from numpy import isinf
 from sklearn.linear_model import SGDRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error
-import matplotlib.pyplot as plt
 import os
 import logging
+
+pd.options.mode.chained_assignment = None
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 # logger.setLevel(logging.DEBUG)
+
+TIMEZONE = "Europe/Berlin"
 
 
 class SGDPredictor:
@@ -32,7 +33,9 @@ class SGDPredictor:
         for pair_csv in os.listdir(self._train_data_path):
             pair_path = self._train_data_path + pair_csv
             df = pd.read_csv(pair_path, sep=",", names=["ts", "price", "vol"])
-            df["datetime"] = pd.to_datetime(df["ts"], unit="s")
+            df["datetime"] = pd.to_datetime(df["ts"], unit="s").dt.tz_localize(
+                TIMEZONE, ambiguous=True, nonexistent="shift_forward"
+            )
             df = df.set_index("datetime")
             if df.empty:
                 continue
@@ -70,7 +73,9 @@ class SGDPredictor:
 
     def predict(self, df_test: pd.DataFrame, max_price: float, max_vol: float):
         logger.info(f"Predicting for {df_test.shape[0]} datapoints.")
-        df_test["datetime"] = pd.to_datetime(df_test["ts"], unit="s")
+        df_test["datetime"] = pd.to_datetime(df_test["ts"], unit="s").dt.tz_localize(
+            TIMEZONE, ambiguous=True, nonexistent="shift_forward"
+        )
         df_test = df_test.set_index("datetime")
         ts_df = df_test[["ts"]].resample(self._batch_size).mean()
         price_df = df_test[["price"]].resample(self._batch_size).mean().fillna(0)
@@ -97,11 +102,15 @@ class SGDPredictor:
         )
         return results
 
-    def calculate_errors(self, actual: pd.DataFrame, pred: pd.DataFrame, pair: str):
-        logger.info(f"Calculating prediction error...")
-        actual["datetime"] = pd.to_datetime(actual["ts"], unit="s")
+    def calculate_errors(self, actual: pd.DataFrame, pred: pd.DataFrame):
+        logger.info("Calculating prediction error...")
+        actual["datetime"] = pd.to_datetime(actual["ts"], unit="s").dt.tz_localize(
+            TIMEZONE, ambiguous=True, nonexistent="shift_forward"
+        )
         actual = actual.set_index("datetime").resample(self._batch_size).mean()
-        pred["datetime"] = pd.to_datetime(pred["ts"], unit="s")
+        pred["datetime"] = pd.to_datetime(pred["ts"], unit="s").dt.tz_localize(
+            TIMEZONE, ambiguous=True, nonexistent="shift_forward"
+        )
         pred = pred.set_index("datetime").resample(self._batch_size).mean()
         joint = pd.merge(
             actual, pred, how="inner", right_index=True, left_index=True
