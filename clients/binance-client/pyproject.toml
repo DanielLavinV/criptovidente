@@ -6,6 +6,7 @@ authors = ["Daniel Lavin <dlavinv64@hotmail.com>"]
 packages = [
     { include = "binance_client" },
     { include = "binance_client/**/*.py" },
+    { include = "binance_client/*.py" },
 ]
 
 [tool.poetry.dependencies]

@@ -1,10 +1,10 @@
 from requests import Request, Session, Response  # noqa: F401
 import json
-import constants
+from . import constants
 from datetime import datetime as dtt
 import math
-from signatures import sign
-from endpoints import endpoints_config
+from .signatures import sign
+from .endpoints import endpoints_config
 import logging
 from typing import Optional, List
 import time
@@ -97,7 +97,6 @@ class BaseClient:
                     break
             else:
                 return
-            # print(f"Header {header}: {weight}")
             self._weight_manager(method="update", weight=weight)
 
 
@@ -420,8 +419,11 @@ class MarketDataClient(BaseClient):
         params = {"symbol": symbol}
         return self._forge_request_and_send("current_average_price", params)
 
-    def twentyfourhour_ticker_price_change_statistics(self, symbol: str) -> dict:
-        params = {"symbol": symbol}
+    def twentyfourhour_ticker_price_change_statistics(
+        self, symbol: Optional[str] = None
+    ) -> dict:
+        params = {}
+        params = self._resolve_optional_arguments(params, symbol=symbol)
         return self._forge_request_and_send(
             "twentyfourhour_ticker_price_change_statistics", params
         )
@@ -759,6 +761,8 @@ class BinanceClient(BaseClient):
         if method == "update":
             self._used_weight = kwargs["weight"]
         if self._used_weight > self._request_weight_limit * 0.9:
-            print("Used weight reaching limit. Taking a rest...")
+            logger.warning("Used weight reaching limit. Taking a rest...")
             time.sleep(30)
-        print(f"Used weight: {self._used_weight}, limit: {self._request_weight_limit}")
+        logger.warning(
+            f"Used weight: {self._used_weight}, limit: {self._request_weight_limit}"
+        )

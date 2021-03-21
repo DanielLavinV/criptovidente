@@ -1,4 +1,4 @@
-from constants import (
+from .constants import (
     SECURITY_TYPES,
     SECURITY_TYPE_MARKET_DATA,
     SECURITY_TYPE_NONE,

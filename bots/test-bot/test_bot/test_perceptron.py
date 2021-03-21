@@ -7,12 +7,12 @@ import os
 count = 0
 reg = SGDRegressor()
 predict_for = "NANOUSD.csv"
-batch_size = "15T"
+batch_size = "30T"
 stop = pd.to_datetime("2020-08-01", format="%Y-%m-%d")
 
 
-for pair_csv in os.listdir("./data"):
-    pair_path = "./data/" + pair_csv
+for pair_csv in os.listdir("../../../bots/bitsurfer/data"):
+    pair_path = "../../../bots/bitsurfer/data/" + pair_csv
     df = pd.read_csv(pair_path, sep=",", names=["ts", "price", "vol"])
     df["datetime"] = pd.to_datetime(df["ts"], unit="s")
     df = df.set_index("datetime")
@@ -29,12 +29,20 @@ for pair_csv in os.listdir("./data"):
     resampled_df = pd.DataFrame(index=ts_df.index)
     resampled_df["price"] = price_df["price"].values / max(price_df["price"].values)
     resampled_df["vol"] = vol_df["vol"].values / max(vol_df["vol"].values)
-    resampled_df = resampled_df.loc[(resampled_df[["price", "vol"]] != 0).any(axis=1)]
     resampled_df["price_t-1"] = resampled_df.shift(1)["price"]
     resampled_df["price_t-2"] = resampled_df.shift(2)["price"]
     resampled_df["vol_t-1"] = resampled_df.shift(1)["vol"]
     resampled_df["vol_t-2"] = resampled_df.shift(2)["vol"]
     resampled_df["target"] = resampled_df.shift(-1)["price"]
+    resampled_df = resampled_df.loc[(resampled_df[["price", "vol"]] != 0).any(axis=1)]
+    resampled_df = resampled_df.loc[
+        (resampled_df[["price_t-1", "vol_t-1"]] != 0).any(axis=1)
+    ]
+    resampled_df = resampled_df.loc[
+        (resampled_df[["price_t-2", "vol_t-2"]] != 0).any(axis=1)
+    ]
+    resampled_df = resampled_df.loc[(resampled_df[["target"]] != 0).any(axis=1)]
+
     resampled_df = resampled_df.dropna()
 
     # test df
