@@ -766,3 +766,4 @@ class BinanceClient(BaseClient):
         logger.warning(
             f"Used weight: {self._used_weight}, limit: {self._request_weight_limit}"
         )
+        print("")
