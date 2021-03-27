@@ -1,21 +1,25 @@
 import pandas as pd
-from math impor floor
+from math import floor
+import logging
+import binance_client.constants as cts
+from datetime import datetime as dtt
+from binance_client.stream import BinanceStreamClient
+import json
 
 MAX_TICKERS_TO_TRACK = 10
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+
 class StreamsManager:
-    def __init__(
-        self,
-        pairs,
-        binance,
-        max_pair_prices_vols,
-        messages,
-        ):
-            self._pairs = pairs
-            self.binance = binance
-            self._max_pair_prices_vols = max_pair_prices_vols
-            self._messages = messages
-            self.streams = []
+    def __init__(self, pairs, binance, max_pair_prices_vols, messages):
+        self._pairs = pairs
+        self.binance = binance
+        self._max_pair_prices_vols = max_pair_prices_vols
+        self._messages = messages
+        self.streams = []
+        self.trades_stream = None
 
     def _handle_trade_message(self, msg):
         m = json.loads(msg)
@@ -28,14 +32,17 @@ class StreamsManager:
 
     def _create_streams(self):
         self.streams = []
+        # logger.info(f"Pairs in Streams: {self._pairs}")
         for pair in self._pairs["pair"]:
             self.streams.append(f"{pair.lower()}@trade")
         self.trades_stream = BinanceStreamClient(
-            streams=streams, on_message=self.handle_trade_message
+            streams=self.streams, on_message=self._handle_trade_message
         )
         self.trades_stream.start()
 
     def _unsub_old_streams(self):
+        if self.trades_stream is None:
+            return
         self.trades_stream.stop()
 
     def refresh(self):
@@ -44,11 +51,13 @@ class StreamsManager:
         self._create_streams()
 
     def stop(self):
-        self.trades_stream.stop() # i.e. stop
+        self.trades_stream.stop()  # i.e. stop
 
     def _acquire_targets(self, ignore_list=[]):
         def get_max_pair_prices():
-            logger.info(f"Fetching max prices and volumes for {self._pairs}")
+            logger.info(
+                f"Fetching max prices and volumes for {self._pairs['pair'].values}"
+            )
             ignore = []
             for pair in self._pairs["pair"]:
                 self._max_pair_prices_vols[pair] = {}
@@ -81,7 +90,9 @@ class StreamsManager:
 
         def get_best_growers():
             logger.info("Getting best market growers...")
-            self._pairs = [0:0]
+            self._pairs[:] = self._pairs[
+                0:0
+            ]  # modify in place or else the link is broken between classes
             info = (
                 self.binance.market_data.twentyfourhour_ticker_price_change_statistics()
             )
@@ -94,7 +105,6 @@ class StreamsManager:
             best_tickers_df = best_tickers_df[
                 best_tickers_df["symbol"].str.contains("BTC")
             ].sort_values(by="change_pct", ascending=False)
-            logger.info(f"Best tickers:\n {best_tickers_df.head()}")
 
             for i, row in best_tickers_df.iterrows():
                 if row["symbol"] in ignore_list:

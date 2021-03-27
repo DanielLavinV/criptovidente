@@ -1,6 +1,7 @@
 *.csv
 *.txt
 *.pyc
+*/dist/*
 
 __pycache__
 

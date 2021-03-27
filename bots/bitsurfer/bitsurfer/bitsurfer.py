@@ -1,16 +1,12 @@
 from binance_client.client import BinanceClient
-from binance_client.stream import BinanceStreamClient
-import binance_client.constants as cts
 import pandas as pd
 import threading
 import time
-from datetime import datetime as dtt
 import schedule
-import json
-from math import floor
 from predictions import PredictionsManager
 from wallet import WalletManager
 from streams import StreamsManager
+from decisions import DecisionsManager
 import logging
 
 pd.set_option("display.float_format", "{:.10f}".format)
@@ -39,7 +35,7 @@ class Bitsurfer(threading.Thread):
                 "ts",
                 "prediction",
                 "pair",
-                "represents"
+                "represents",
             ]  # "ts" references when the prediction WILL happen
         )
         self._trades_df = pd.DataFrame(columns=["ts", "price", "vol", "pair"])
@@ -61,20 +57,20 @@ class Bitsurfer(threading.Thread):
             ops_time_unit=self._ops_time_unit,
         )
         self.wallet_manager = WalletManager(
-            client=self.binance,
-            balances=self._balances
+            client=self.binance, balances=self._balances
         )
         self.streams_manager = StreamsManager(
             pairs=self._pairs,
             binance=self.binance,
             max_pair_prices_vols=self._max_pair_prices_vols,
-            messages=self._messages
+            messages=self._messages,
         )
         self.decisions_manager = DecisionsManager(
             balances=self._balances,
             pairs_df=self._pairs,
-            predictions_df=self._prediction_results_df
-        ) 
+            predictions_df=self._prediction_results_df,
+        )
+        logger.info("Start-up complete.")
 
     def _drop_old_entries(self):
         logger.info("Cleaning up old entries from dataframes...")
@@ -89,13 +85,16 @@ class Bitsurfer(threading.Thread):
         return self._ops_frequency * 10
 
     def run(self):
+        # logger.info(f"Pairs in main before streams refresh: {self._pairs}")
         self.streams_manager.refresh()
-        schedule.every(self._ops_frequency).minutes.do(
-            self.predictions_manager.run_prediction
-        )
+        # logger.info(f"Pairs in main after streams refresh: {self._pairs}")
+        logger.info("Streams initilization complete.")
+        # schedule.every(self._ops_frequency).minutes.do(
+        #     self.predictions_manager.run_prediction
+        # )
         # This should be the final line
-        # schedule.every(self._ops_frequency).minutes.do(self.execution_cycle)
-        schedule.every(30).minutes.do(self.streams_manager.refresh())
+        schedule.every(self._ops_frequency).minutes.do(self.execution_cycle)
+        schedule.every(30).minutes.do(self.streams_manager.refresh)
         schedule.every(self._get_old_periods()).minutes.do(self._drop_old_entries)
         while not self._should_terminate:
             schedule.run_pending()
@@ -107,14 +106,15 @@ class Bitsurfer(threading.Thread):
         self._should_terminate = True
 
     def execution_cycle(self):
+        logger.info("Running execution cycle...")
         self.predictions_manager.run_prediction()
         decision = self.decisions_manager.decide()
         if not decision:
             logger.info("Doin nothin.")
         else:
             logger.info(f"Decision: {decision}")
-            self.orders_manager.create(decision)
-        
+            # self.orders_manager.create(decision)
+
 
 if __name__ == "__main__":
     b = Bitsurfer()

@@ -8,8 +8,7 @@ import logging
 pd.options.mode.chained_assignment = None
 
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.NullHandler())
-# logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 
 TIMEZONE = "Europe/Berlin"
 
@@ -33,9 +32,7 @@ class SGDPredictor:
         for pair_csv in os.listdir(self._train_data_path):
             pair_path = self._train_data_path + pair_csv
             df = pd.read_csv(pair_path, sep=",", names=["ts", "price", "vol"])
-            df["datetime"] = pd.to_datetime(df["ts"], unit="s")  # .dt.tz_localize(
-            #     TIMEZONE, ambiguous=True, nonexistent="shift_forward"
-            # )
+            df["datetime"] = pd.to_datetime(df["ts"], unit="s")
             df = df.set_index("datetime")
             if df.empty:
                 continue
@@ -73,11 +70,7 @@ class SGDPredictor:
 
     def predict(self, df_test: pd.DataFrame, max_price: float, max_vol: float):
         logger.info(f"Predicting for {df_test.shape[0]} datapoints.")
-        df_test["datetime"] = pd.to_datetime(
-            df_test["ts"], unit="s"
-        )  # .dt.tz_localize(
-        #     TIMEZONE, ambiguous=True, nonexistent="shift_forward"
-        # )
+        df_test["datetime"] = pd.to_datetime(df_test["ts"], unit="s")
         df_test = df_test.set_index("datetime")
         ts_df = df_test[["ts"]].resample(self._batch_size).mean()
         price_df = df_test[["price"]].resample(self._batch_size).mean().fillna(0)
@@ -102,10 +95,13 @@ class SGDPredictor:
         results[f"prediction_t+{self._future_periods}"] = self.reggressor.predict(
             X=predict_df
         )
+        results["price"] = features["price"]
         return results
 
-    def calculate_errors(self, actual: pd.DataFrame, pred: pd.DataFrame):
-        logger.info("Calculating prediction error...")
+    def forge_joint_dataframe_for_errors(
+        self, actual: pd.DataFrame, pred: pd.DataFrame
+    ):
+        # logger.info("Calculating prediction error...")
         actual["datetime"] = pd.to_datetime(actual["ts"], unit="s").dt.tz_localize(
             TIMEZONE, ambiguous=True, nonexistent="shift_forward"
         )  # .dt.tz_convert(TIMEZONE)
@@ -114,11 +110,13 @@ class SGDPredictor:
             TIMEZONE, ambiguous=True, nonexistent="shift_forward"
         )  # .dt.tz_convert(TIMEZONE)
         pred = pred.set_index("datetime").resample(self._batch_size).mean()
-        logger.info(f"ACTUAL: {actual.head(30)}")
-        logger.info(f"PRED: {pred.head(30)}")
         joint = pd.merge(
             actual, pred, how="inner", right_index=True, left_index=True
         ).dropna()
+        return joint
+
+    def calculate_errors(self, actual: pd.DataFrame, pred: pd.DataFrame):
+        joint = self.forge_joint_dataframe_for_errors(actual, pred)
         if joint.isnull().any().any():
             logger.error(
                 f"Unable to calculate error: DF contains NaN: \n {joint.head()}"
@@ -139,3 +137,27 @@ class SGDPredictor:
         )
         mae = mean_absolute_error(y_true=joint["price"], y_pred=joint["prediction"])
         return rmse, mae
+
+    def determine_represents(self, actual: pd.DataFrame, pred: pd.DataFrame):
+        represents = []
+        joint = self.forge_joint_dataframe_for_errors(actual, pred)
+        if joint.isnull().any().any():
+            logger.error(
+                f"Unable to calculate represents: DF contains NaN: \n {joint.head()}"
+            )
+        if isinf(joint).any().any():
+            logger.error(
+                f"Unable to calculate represents: DF contains infinity: \n {joint.head()}"
+            )
+        if joint.empty:
+            logger.error(
+                "Unable to calculate represents: no temporal intersection between predictions and real measurements."
+            )
+        for i, row in joint.iterrows():
+            if row["prediction"] > row["price"] * 1.00075:
+                represents.append("increase")
+            if row["prediction"] < row["price"]:
+                represents.append("decrease")
+            else:
+                represents.append("no_change")
+        return represents

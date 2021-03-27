@@ -39,6 +39,7 @@ class PredictionsManager:
         )
 
     def run_prediction(self):
+        logger.info(f"Currently have {len(self._messages)} messages.")
         for i, m in enumerate(self._messages):
             try:
                 ts = int(floor(m["E"] / 1000))
@@ -48,6 +49,7 @@ class PredictionsManager:
                 self._trades_df.loc[i] = [ts, price, vol, pair]
             except KeyError as e:
                 logger.error(f"Key error for message {m}")
+        # logger.info(f"PAIRS IN PRED MANAGER: {self._pairs}")
         for pair in self._pairs["pair"]:
             pair_df = (
                 self._trades_df[self._trades_df["pair"] == pair]
@@ -77,21 +79,24 @@ class PredictionsManager:
                 results[f"prediction_t+{self._future_periods}"].values
                 * self._max_pair_prices_vols[pair]["max_price"]
             )
-            results["ts"] = ( # when the predicted is bound to happen
+            results["ts"] = (  # when the predicted is bound to happen
                 results.index
                 + timedelta(minutes=self._ops_frequency * self._future_periods)
             ).values.astype(np.int64) // 10 ** 9
             results["pair"] = pair
-            results["represents"] = self._determine_represents(results["prediction"], predict_df[2:]["price"])
-            self._prediction_results_df = self._prediction_results_df.append(
-                results[["ts", "prediction", "pair", "represents"]]
+            results["represents"] = self._determine_represents(
+                results[["price", f"prediction_t+{self._future_periods}"]]
             )
+            last_idx = len(self._prediction_results_df)
+            next_last_idx = last_idx + len(results)
+            self._prediction_results_df.loc[
+                last_idx:next_last_idx, ["ts", "prediction", "pair", "represents"]
+            ] = results[["ts", "prediction", "pair", "represents"]]
+
             logger.info(f"LATEST PREDICTION RESULTS {pair}: \n{results.tail(3)}")
         self._calculate_prediction_errors()
 
-    def _calculate_prediction_errors(self):
-        if self._prediction_results_df.empty:
-            return
+    def _find_time_relevant_actual_and_predictions(self):
         beginning = min(self._prediction_results_df["ts"])
         end = max(self._trades_df["ts"])
         predictions = self._prediction_results_df[
@@ -101,8 +106,14 @@ class PredictionsManager:
         actuals = self._trades_df[
             (self._trades_df["ts"] > beginning) & (self._trades_df["ts"] < end)
         ]
+        return predictions, actuals
+
+    def _calculate_prediction_errors(self):
+        if self._prediction_results_df.empty:
+            return
+        predictions, actuals = self._find_time_relevant_actual_and_predictions()
         if predictions.empty or actuals.empty:
-            logger.info("Can't calculate predictions error due to lack of data.")
+            logger.error("Can't calculate predictions error due to lack of data.")
             return
         for pair in self._pairs["pair"]:
             actual_pair_df = actuals[actuals["pair"] == pair][["ts", "price"]].astype(
@@ -124,15 +135,12 @@ class PredictionsManager:
             f"CURRENT PREDICTION ERRORS:\n{self._prediction_errors_df.head(10)}"
         )
 
-    def _determine_represents(self, predictions, actuals):
+    def _determine_represents(self, joint):
         represents = []
-        if len(predictions) != len (actuals):
-            logger.error("Represents error: predictions and actuals of different length.")
-            return []
-        for i, pred in enumerate(predictions):
-            if pred > actuals[i] * 1.00075:
+        for i, row in joint.iterrows():
+            if row[f"prediction_t+{self._future_periods}"] > row["price"] * 1.00075:
                 represents.append("increase")
-            if pred < actuals[i]:
+            elif row[f"prediction_t+{self._future_periods}"] < row["price"]:
                 represents.append("decrease")
             else:
                 represents.append("no_change")

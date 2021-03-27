@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class DecisionsManager:
@@ -9,7 +13,7 @@ class DecisionsManager:
     def decide(self):
         decision = []
         current_asset = self.current_working_asset()
-        if current_asset: # I have an asset currently
+        if current_asset:  # I have an asset currently
             logger.info(f"Determining what to do with {current_asset} holdings...")
             change = self.determine_change(current_asset)
             if change == "increase":
@@ -23,36 +27,43 @@ class DecisionsManager:
                 else:
                     logger.info(f"Found next best asset {next_best}. Will buy.")
                     decision.append(("buy", next_best))
-        else: # I just have bitcoin
+        else:  # I just have bitcoin
             logger.info("I only have bitcoin.")
             next_best = self.find_next_best("ninguna_moneda")
-                if not next_best:
-                    logger.warning("Unable to find promising asset! Doing nothing!")
-                else:
-                    logger.info(f"Found promising asset {next_best}. Will buy.")
-                    decision.append(("buy", next_best))
+            if not next_best:
+                logger.warning("Unable to find promising asset! Doing nothing!")
+            else:
+                logger.info(f"Found promising asset {next_best}. Will buy.")
+                decision.append(("buy", next_best))
         logger.info(f"DECIDED TO: {'do nothing' if not decision else decision}")
         return decision
-            
+
     def find_next_best(self, current_asset):
-        for i, row in self._pairs_df.sort_values(by="growth", ascending=False).iterrows():
+        logger.info(f"PREDICTIONS DF IN DECISIONS: \n{self._predictions_df}")
+        for i, row in self._pairs_df.sort_values(
+            by="growth", ascending=False
+        ).iterrows():
             if current_asset in row["pair"]:
                 continue
-            prediction = self._predictions_df[row["pair"] == self._predictions_df["pair"]]
+            prediction = self._predictions_df[
+                row["pair"] == self._predictions_df["pair"]
+            ]
             if prediction.empty:
+                logger.info(f"No prediction found for {row['pair']}")
                 continue
             if prediction["represents"] == "increase":
                 return row["pair"].replace("btc", "")
         return None
 
-
     def current_working_asset(self):
         logger.info(f"Current assets: {self._balances.keys()}")
-        for asset in self._balances.keys(): # wallet manager ensures only balances != 0 present
+        for (
+            asset
+        ) in self._balances.keys():  # wallet manager ensures only balances != 0 present
             if asset != "btc":
                 return asset
         return None
 
     def determine_change(self, current_asset: str):
         asset_row = self._predictions_df[current_asset in self._predictions_df["pair"]]
-        return asset_row["represents"] # either "increase", "decrease", "no_change"
+        return asset_row["represents"]  # either "increase", "decrease", "no_change"
