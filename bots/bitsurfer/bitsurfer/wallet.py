@@ -8,9 +8,10 @@ logger.setLevel(logging.DEBUG)
 
 
 class WalletManager:
-    def __init__(self, client):
+    def __init__(self, client, balances):
         self.binance = client
         self._wallet_history_file = "wallet_history.csv"
+        self.balances = balances
         self.update_fees()
         self.update_balances()
 

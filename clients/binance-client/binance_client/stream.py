@@ -36,6 +36,7 @@ class BinanceStreamClient(threading.Thread):
                 except Exception as e:
                     logger.error(f"Error when subscribing to streams: {e}")
                     self._should_terminate = True
+            await ws.send(self._build_unsubscription_string())
             self.stop()
 
     def run(self):
@@ -50,6 +51,9 @@ class BinanceStreamClient(threading.Thread):
                 f"{WEBSOCKET_BASE_ENDPOINT}/stream?streams={'/'.join(self._streams)}"
             )
         return con_string
+
+    def _build_unsubscription_string(self):
+        return json.dumps({"method": "UNSUBSCRIBE", "params": self._streams, "id": 1})
 
     def _build_subscription_string(self):
         return json.dumps({"method": "SUBSCRIBE", "params": self._streams, "id": 1})

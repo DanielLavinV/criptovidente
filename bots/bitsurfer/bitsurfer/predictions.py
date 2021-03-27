@@ -48,7 +48,7 @@ class PredictionsManager:
                 self._trades_df.loc[i] = [ts, price, vol, pair]
             except KeyError as e:
                 logger.error(f"Key error for message {m}")
-        for pair in self._pairs:
+        for pair in self._pairs["pair"]:
             pair_df = (
                 self._trades_df[self._trades_df["pair"] == pair]
                 .drop(columns=["pair"])
@@ -77,13 +77,14 @@ class PredictionsManager:
                 results[f"prediction_t+{self._future_periods}"].values
                 * self._max_pair_prices_vols[pair]["max_price"]
             )
-            results["ts"] = (
+            results["ts"] = ( # when the predicted is bound to happen
                 results.index
                 + timedelta(minutes=self._ops_frequency * self._future_periods)
             ).values.astype(np.int64) // 10 ** 9
             results["pair"] = pair
+            results["represents"] = self._determine_represents(results["prediction"], predict_df[2:]["price"])
             self._prediction_results_df = self._prediction_results_df.append(
-                results[["ts", "prediction", "pair"]]
+                results[["ts", "prediction", "pair", "represents"]]
             )
             logger.info(f"LATEST PREDICTION RESULTS {pair}: \n{results.tail(3)}")
         self._calculate_prediction_errors()
@@ -103,7 +104,7 @@ class PredictionsManager:
         if predictions.empty or actuals.empty:
             logger.info("Can't calculate predictions error due to lack of data.")
             return
-        for pair in self._pairs:
+        for pair in self._pairs["pair"]:
             actual_pair_df = actuals[actuals["pair"] == pair][["ts", "price"]].astype(
                 float
             )
@@ -122,3 +123,17 @@ class PredictionsManager:
         logger.info(
             f"CURRENT PREDICTION ERRORS:\n{self._prediction_errors_df.head(10)}"
         )
+
+    def _determine_represents(self, predictions, actuals):
+        represents = []
+        if len(predictions) != len (actuals):
+            logger.error("Represents error: predictions and actuals of different length.")
+            return []
+        for i, pred in enumerate(predictions):
+            if pred > actuals[i] * 1.00075:
+                represents.append("increase")
+            if pred < actuals[i]:
+                represents.append("decrease")
+            else:
+                represents.append("no_change")
+        return represents
