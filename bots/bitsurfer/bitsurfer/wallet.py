@@ -8,10 +8,10 @@ logger.setLevel(logging.DEBUG)
 
 
 class WalletManager:
-    def __init__(self, client, balances):
+    def __init__(self, client, states):
         self.binance = client
+        self.states = states
         self._wallet_history_file = "wallet_history.csv"
-        self.balances = balances
         self.update_fees()
         self.update_balances()
 
@@ -28,21 +28,21 @@ class WalletManager:
         r = self.binance.spot_account_trade.account_information()["content"]
         balances = {}
         for b in r["balances"]:
-            if float(b["free"]) and float(b["locked"]) == 0:
+            if float(b["free"]) == 0 and float(b["locked"]) == 0:
                 continue
             balances[b["asset"]] = float(b["free"])
-        self.balances = balances
+        self.states["balances"] = balances
 
     def _update_wallet_history(self):
         if self.wallet_history_file in listdir("/history"):
             wallet_history = pd.read_csv(f"history/{self._wallet_history_file}")
         else:
             wallet_history = pd.DataFrame(columns=["ts", "coin", "balance"])
-        for b in self.balances.keys():
+        for b in self.states["balances"].keys():
             wallet_history.loc[-1] = [
                 dtt.now().timestamp(),
                 b,
-                self.balances[b]["free"],
+                self.states["balances"][b]["free"],
             ]
             wallet_history.index = wallet_history.index + 1
             wallet_history = wallet_history.sort_index()

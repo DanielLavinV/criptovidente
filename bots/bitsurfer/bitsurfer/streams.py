@@ -13,11 +13,9 @@ logger.setLevel(logging.DEBUG)
 
 
 class StreamsManager:
-    def __init__(self, pairs, binance, max_pair_prices_vols, messages):
-        self._pairs = pairs
+    def __init__(self, binance, states):
         self.binance = binance
-        self._max_pair_prices_vols = max_pair_prices_vols
-        self._messages = messages
+        self.states = states
         self.streams = []
         self.trades_stream = None
 
@@ -26,14 +24,14 @@ class StreamsManager:
         if "result" in m.keys():
             return
         if "stream" in m.keys() and "data" in m.keys():
-            self._messages.append(m["data"])
+            self.states["messages"].append(m["data"])
             return
-        self._messages.append(m)
+        self.states["messages"].append(m)
 
     def _create_streams(self):
         self.streams = []
-        # logger.info(f"Pairs in Streams: {self._pairs}")
-        for pair in self._pairs["pair"]:
+        # logger.info(f"Pairs in Streams: {self.states["pairs"]}")
+        for pair in self.states["pairs"]["pair"]:
             self.streams.append(f"{pair.lower()}@trade")
         self.trades_stream = BinanceStreamClient(
             streams=self.streams, on_message=self._handle_trade_message
@@ -56,11 +54,11 @@ class StreamsManager:
     def _acquire_targets(self, ignore_list=[]):
         def get_max_pair_prices():
             logger.info(
-                f"Fetching max prices and volumes for {self._pairs['pair'].values}"
+                f"Fetching max prices and volumes for {self.states['pairs']['pair'].values}"
             )
             ignore = []
-            for pair in self._pairs["pair"]:
-                self._max_pair_prices_vols[pair] = {}
+            for pair in self.states["pairs"]["pair"]:
+                self.states["max_prices_vols"][pair] = {}
                 max_price = 0
                 max_vol = 0
                 earliest_data = 20000000
@@ -83,14 +81,14 @@ class StreamsManager:
                     logger.info(f"Pair {pair} is younger than 24 hours. Ignoring...")
                     ignore.append(pair)
                 else:
-                    self._max_pair_prices_vols[pair]["max_price"] = max_price
-                    self._max_pair_prices_vols[pair]["max_vol"] = max_vol
+                    self.states["max_prices_vols"][pair]["max_price"] = max_price
+                    self.states["max_prices_vols"][pair]["max_vol"] = max_vol
             if len(ignore) != 0:
                 self._acquire_targets(ignore)
 
         def get_best_growers():
             logger.info("Getting best market growers...")
-            self._pairs[:] = self._pairs[
+            self.states["pairs"][:] = self.states["pairs"][
                 0:0
             ]  # modify in place or else the link is broken between classes
             info = (
@@ -109,9 +107,9 @@ class StreamsManager:
             for i, row in best_tickers_df.iterrows():
                 if row["symbol"] in ignore_list:
                     continue
-                self._pairs.loc[-1] = [row["symbol"], row["change_pct"]]
-                self._pairs.index = self._pairs.index + 1
-                if len(self._pairs) > MAX_TICKERS_TO_TRACK:
+                self.states["pairs"].loc[-1] = [row["symbol"], row["change_pct"]]
+                self.states["pairs"].index = self.states["pairs"].index + 1
+                if len(self.states["pairs"]) > MAX_TICKERS_TO_TRACK:
                     break
 
         get_best_growers()

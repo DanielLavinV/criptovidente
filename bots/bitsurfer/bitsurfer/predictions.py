@@ -10,27 +10,11 @@ logger.setLevel(logging.DEBUG)
 
 
 class PredictionsManager:
-    def __init__(
-        self,
-        messages,
-        pairs,
-        ops_freq,
-        trades_df,
-        pred_results_df,
-        pred_errors_df,
-        future_periods,
-        max_prices_vols,
-        ops_time_unit,
-    ):
-        self._messages = messages
-        self._trades_df = trades_df
-        self._pairs = pairs
+    def __init__(self, ops_freq, future_periods, ops_time_unit, states):
         self._ops_frequency = ops_freq
-        self._prediction_results_df = pred_results_df
         self._future_periods = future_periods
-        self._max_pair_prices_vols = max_prices_vols
-        self._prediction_errors_df = pred_errors_df
         self._ops_time_unit = ops_time_unit
+        self.states = states
         self.predictor = SGDPredictor(
             batch_size_mins=self._ops_frequency,
             train_data_path="../data/",
@@ -39,20 +23,20 @@ class PredictionsManager:
         )
 
     def run_prediction(self):
-        logger.info(f"Currently have {len(self._messages)} messages.")
-        for i, m in enumerate(self._messages):
+        logger.info(f"Currently have {len(self.states['messages'])} messages.")
+        for i, m in enumerate(self.states["messages"]):
             try:
                 ts = int(floor(m["E"] / 1000))
                 price = float(m["p"])
                 vol = float(m["q"])
                 pair = m["s"]
-                self._trades_df.loc[i] = [ts, price, vol, pair]
+                self.states["trades"].loc[i] = [ts, price, vol, pair]
             except KeyError as e:
                 logger.error(f"Key error for message {m}")
-        # logger.info(f"PAIRS IN PRED MANAGER: {self._pairs}")
-        for pair in self._pairs["pair"]:
+        # logger.info(f"PAIRS IN PRED MANAGER: {self.states["pairs"]}")
+        for pair in self.states["pairs"]["pair"]:
             pair_df = (
-                self._trades_df[self._trades_df["pair"] == pair]
+                self.states["trades"][self.states["trades"]["pair"] == pair]
                 .drop(columns=["pair"])
                 .reset_index(drop=True)
                 .astype(float)
@@ -72,12 +56,12 @@ class PredictionsManager:
             logging.info(f"Performing prediction for pair {pair}")
             results = self.predictor.predict(
                 df_test=predict_df,
-                max_price=self._max_pair_prices_vols[pair]["max_price"],
-                max_vol=self._max_pair_prices_vols[pair]["max_vol"],
+                max_price=self.states["max_prices_vols"][pair]["max_price"],
+                max_vol=self.states["max_prices_vols"][pair]["max_vol"],
             )
             results["prediction"] = (
                 results[f"prediction_t+{self._future_periods}"].values
-                * self._max_pair_prices_vols[pair]["max_price"]
+                * self.states["max_prices_vols"][pair]["max_price"]
             )
             results["ts"] = (  # when the predicted is bound to happen
                 results.index
@@ -87,35 +71,36 @@ class PredictionsManager:
             results["represents"] = self._determine_represents(
                 results[["price", f"prediction_t+{self._future_periods}"]]
             )
-            last_idx = len(self._prediction_results_df)
+            last_idx = len(self.states["pred_results"])
             next_last_idx = last_idx + len(results)
-            self._prediction_results_df.loc[
-                last_idx:next_last_idx, ["ts", "prediction", "pair", "represents"]
-            ] = results[["ts", "prediction", "pair", "represents"]]
+            self.states["pred_results"] = self.states["pred_results"].append(
+                results[["ts", "prediction", "pair", "represents"]]
+            )
 
             logger.info(f"LATEST PREDICTION RESULTS {pair}: \n{results.tail(3)}")
         self._calculate_prediction_errors()
 
     def _find_time_relevant_actual_and_predictions(self):
-        beginning = min(self._prediction_results_df["ts"])
-        end = max(self._trades_df["ts"])
-        predictions = self._prediction_results_df[
-            (self._prediction_results_df["ts"] > beginning)
-            & (self._prediction_results_df["ts"] < end)
+        beginning = min(self.states["pred_results"]["ts"])
+        end = max(self.states["trades"]["ts"])
+        predictions = self.states["pred_results"][
+            (self.states["pred_results"]["ts"] > beginning)
+            & (self.states["pred_results"]["ts"] < end)
         ]
-        actuals = self._trades_df[
-            (self._trades_df["ts"] > beginning) & (self._trades_df["ts"] < end)
+        actuals = self.states["trades"][
+            (self.states["trades"]["ts"] > beginning)
+            & (self.states["trades"]["ts"] < end)
         ]
         return predictions, actuals
 
     def _calculate_prediction_errors(self):
-        if self._prediction_results_df.empty:
+        if self.states["pred_results"].empty:
             return
         predictions, actuals = self._find_time_relevant_actual_and_predictions()
         if predictions.empty or actuals.empty:
             logger.error("Can't calculate predictions error due to lack of data.")
             return
-        for pair in self._pairs["pair"]:
+        for pair in self.states["pairs"]["pair"]:
             actual_pair_df = actuals[actuals["pair"] == pair][["ts", "price"]].astype(
                 float
             )
@@ -124,15 +109,15 @@ class PredictionsManager:
             ].astype(float)
             if actual_pair_df.empty or predictions_pair_df.empty:
                 logger.info(f"Can't evaluate prediction performance for {pair}")
-                self._prediction_errors_df.loc[pair] = [float("nan"), float("nan")]
+                self.states["pred_errors"].loc[pair] = [float("nan"), float("nan")]
                 continue
             logger.info(f"Calculating prediction error for {pair}")
             rmse, mae = self.predictor.calculate_errors(
                 actual_pair_df, predictions_pair_df
             )
-            self._prediction_errors_df.loc[pair] = [rmse, mae]
+            self.states["pred_errors"].loc[pair] = [rmse, mae]
         logger.info(
-            f"CURRENT PREDICTION ERRORS:\n{self._prediction_errors_df.head(10)}"
+            f"CURRENT PREDICTION ERRORS:\n{self.states['pred_errors'].head(10)}"
         )
 
     def _determine_represents(self, joint):
