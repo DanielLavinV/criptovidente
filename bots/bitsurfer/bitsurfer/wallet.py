@@ -18,7 +18,11 @@ class WalletManager:
     def update_fees(self):
         logger.info("Updating fees...")
         fees = {}
-        r = self.binance.wallet.trade_fee()["content"]
+        r = self.binance.wallet.trade_fee()
+        if r["http_code"] != 200:
+            logger.error(f"Error while fetching fees - http code {r['http_code']}")
+            return
+        r = r["content"]
         for fee in r["tradeFee"]:
             fees[fee["symbol"]] = {"maker": fee["maker"], "taker": fee["taker"]}
         self.fees = fees

@@ -13,10 +13,11 @@ logger.setLevel(logging.DEBUG)
 
 
 class StreamsManager:
-    def __init__(self, binance, states):
+    def __init__(self, binance, states: dict, test: bool = False):
         self.binance = binance
         self.states = states
         self.streams = []
+        self._test_net = test
         self.trades_stream = None
 
     def _handle_trade_message(self, msg):
@@ -34,7 +35,9 @@ class StreamsManager:
         for pair in self.states["pairs"]["pair"]:
             self.streams.append(f"{pair.lower()}@trade")
         self.trades_stream = BinanceStreamClient(
-            streams=self.streams, on_message=self._handle_trade_message
+            streams=self.streams,
+            on_message=self._handle_trade_message,
+            test_net=self._test_net,
         )
         self.trades_stream.start()
 

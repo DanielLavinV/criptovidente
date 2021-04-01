@@ -20,13 +20,13 @@ class DecisionsManager:
                 logger.info("Current asset is good! Will hold it for another period.")
             elif change == "decrease" or change == "no_change":
                 logger.info("Current asset bound to decrease/nochange. Will sell.")
-                decision.append(("sell", current_asset))
+                decision.append(("SELL", current_asset))
                 next_best = self.find_next_best(current_asset)
                 if not next_best:
                     logger.warning("Unable to find next best asset! Doing nothing!")
                 else:
                     logger.info(f"Found next best asset {next_best}. Will buy.")
-                    decision.append(("buy", next_best))
+                    decision.append(("BUY", next_best))
         else:  # I just have bitcoin
             logger.info("I only have bitcoin.")
             next_best = self.find_next_best("ninguna_moneda")
@@ -34,7 +34,7 @@ class DecisionsManager:
                 logger.warning("Unable to find promising asset! Doing nothing!")
             else:
                 logger.info(f"Found promising asset {next_best}. Will buy.")
-                decision.append(("buy", next_best))
+                decision.append(("BUY", next_best))
         logger.info(f"DECIDED TO: {'do nothing' if not decision else decision}")
         return decision
 
@@ -63,15 +63,17 @@ class DecisionsManager:
                 f"For {row['pair']} predicted a {prediction.reset_index()['represents'].iloc[0]} happening at {pd.to_datetime(prediction.reset_index()['ts'].iloc[0], unit='s')}"  # noqa: E501
             )
             if prediction.reset_index()["represents"].iloc[0] == "increase":
-                return row["pair"].replace("btc", "")
+                return row["pair"]
         return None
 
     def current_working_asset(self):
         logger.info(f"Current assets: {self.states['balances'].keys()}")
+        base_assets = ["BTC"]  # For real network
+        # base_assets = ["BTC", "BNB", "BUSD", 'ETH', 'LTC', 'TRX', 'USDT', 'XRP']
         for asset in self.states[
             "balances"
         ].keys():  # wallet manager ensures only balances != 0 present
-            if asset.lower() != "btc":
+            if asset not in base_assets:
                 return asset
         return None
 

@@ -90,6 +90,9 @@ class SGDPredictor:
         features = resampled_test_df[
             ["price", "vol", "price_t-1", "price_t-2", "vol_t-1", "vol_t-2"]
         ]
+        if features.empty:
+            logger.error("Insufficient data gathered to run prediction.")
+            return None
         predict_df = features
         results = pd.DataFrame(index=predict_df.index)
         results[f"prediction_t+{self._future_periods}"] = self.reggressor.predict(

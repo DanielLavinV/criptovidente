@@ -7,6 +7,7 @@ from predictions import PredictionsManager
 from wallet import WalletManager
 from streams import StreamsManager
 from decisions import DecisionsManager
+from orders import OrdersManager
 import logging
 
 pd.set_option("display.float_format", "{:.10f}".format)
@@ -25,8 +26,8 @@ logger.addHandler(ch)
 class Bitsurfer(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
-        self.binance = BinanceClient("/home/lavin/.binance/keys.json", False)
-        self.binance_test = BinanceClient("/home/lavin/.binance/keys.json", True)
+        self._test_net = True
+        self.binance = BinanceClient("/home/lavin/.binance/keys.json", self._test_net)
         self._ops_frequency = 1
         self._ops_time_unit = "T"
         self._future_periods = 1
@@ -63,8 +64,11 @@ class Bitsurfer(threading.Thread):
             states=self.states,
         )
         self.wallet_manager = WalletManager(client=self.binance, states=self.states)
-        self.streams_manager = StreamsManager(binance=self.binance, states=self.states)
+        self.streams_manager = StreamsManager(
+            binance=self.binance, states=self.states, test=self._test_net
+        )
         self.decisions_manager = DecisionsManager(states=self.states)
+        self.orders_manager = OrdersManager(binance=self.binance, states=self.states)
         logger.info("Start-up complete.")
 
     def _drop_old_entries(self):
@@ -77,7 +81,7 @@ class Bitsurfer(threading.Thread):
         self._messages = self._messages[-5000:]
 
     def _get_old_periods(self):
-        return self._ops_frequency * 10
+        return self._ops_frequency * 4
 
     def run(self):
         # logger.info(f"Pairs in main before streams refresh: {self.states['pairs']}")
@@ -108,7 +112,7 @@ class Bitsurfer(threading.Thread):
             logger.info("Doin nothin.")
         else:
             logger.info(f"Decision: {decision}")
-            # self.orders_manager.create(decision)
+            self.orders_manager.test_order(decision)
 
 
 if __name__ == "__main__":

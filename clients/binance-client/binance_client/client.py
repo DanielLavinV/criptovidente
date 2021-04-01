@@ -20,8 +20,9 @@ class BaseClient:
         self.endpoints_config = endpoints_config[client_name]
         with open(keys_file) as f:
             keys = json.load(f)
-            self._api_key = keys["API_KEY"]
-            self._secret_key = keys["SECRET_KEY"]
+            accessor = "REAL" if not test_net else "TEST"
+            self._api_key = keys[accessor]["API_KEY"]
+            self._secret_key = keys[accessor]["SECRET_KEY"]
         self._session = Session()
         self._test_net = test_net
         self._base_url = (
@@ -32,6 +33,8 @@ class BaseClient:
     def _forge_request_and_send(self, endpoint: str, params: dict) -> Request:
         cfg = self.endpoints_config[endpoint]
         url = self._forge_url(cfg)
+        if url is None:  # nonexistant endpoint in the test api
+            return self._request_result(69, {})  # dummy http code
         method = cfg["method"]
         security_headers, params = self._check_security(cfg, params)
         r = Request(method=method, url=url, params=params, headers=security_headers)
@@ -57,15 +60,12 @@ class BaseClient:
         return int(math.floor(dtt.now().timestamp() * 1000))
 
     def _forge_url(self, endpoint_config: dict) -> str:
-        return (
-            self._base_url + endpoint_config["path"]
-            if not self._test_net
-            else self._base_url
-            + endpoint_config["path"]
-            .replace("wapi", "api")
-            .replace("sapi", "api")
-            .replace("v1", "v3")
-        )
+        path = endpoint_config["path"]
+        if self._test_net:
+            path = path.replace("v1", "v3")
+            if "wapi" in path or "sapi" in path:
+                return None  # endpoints with wapi and sapi do not exist in the test api
+        return self._base_url + path
 
     def _resolve_optional_arguments(self, params: dict, **kwargs) -> dict:
         for arg, val in kwargs.items():
@@ -78,8 +78,15 @@ class BaseClient:
         response = self._session.send(req.prepare())
         if self._parse_weight_response(response):
             return self._send(req)
-        result = {"http_code": response.status_code, "content": response.json()}
+        try:
+            result = self._request_result(response.status_code, response.json())
+        except ValueError as e:
+            logger.error(f"Error when decoding json - {e}")
+            result = self._request_result(response.status_code, {})
         return result
+
+    def _request_result(self, http_code, content):
+        return {"http_code": http_code, "content": content}
 
     def _parse_weight_response(self, response):
         code = response.status_code
@@ -469,6 +476,7 @@ class SpotAccountTradeClient(BaseClient):
             "timestamp": self._timestamp(),
         }
         params = self._resolve_optional_arguments(
+            params,
             timeInForce=time_in_force,
             quantity=quantity,
             quoteOrderQty=quote_order_qty,

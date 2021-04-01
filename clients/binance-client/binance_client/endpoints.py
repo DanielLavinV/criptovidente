@@ -204,7 +204,7 @@ endpoints_config = {
     "spot_account_trade": {
         "test_new_order": {
             "path": "/api/v3/order/test",
-            "method": "GET",
+            "method": "POST",
             "security": SECURITY_TYPES[SECURITY_TYPE_TRADE],
             "weight": 1,
         },

@@ -59,6 +59,8 @@ class PredictionsManager:
                 max_price=self.states["max_prices_vols"][pair]["max_price"],
                 max_vol=self.states["max_prices_vols"][pair]["max_vol"],
             )
+            if results is None:
+                continue
             results["prediction"] = (
                 results[f"prediction_t+{self._future_periods}"].values
                 * self.states["max_prices_vols"][pair]["max_price"]

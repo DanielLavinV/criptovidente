@@ -5,7 +5,7 @@ import threading
 # import orjson as json
 import json
 from typing import List, Callable, Any
-from .constants import WEBSOCKET_BASE_ENDPOINT
+from constants import WEBSOCKET_BASE_ENDPOINT, WEBSOCKET_BASE_TEST_ENDPOINT
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,10 +17,10 @@ class BinanceStreamClient(threading.Thread):
         self,
         streams: List[str],
         on_message: Callable[[Any], Any],
-        how_many: str = "single",
+        test_net: bool = False,
     ):
         threading.Thread.__init__(self)
-        self._how_many = how_many
+        self._test_net = test_net
         self._streams = streams
         self._on_message = on_message
         self._should_terminate = False
@@ -44,12 +44,15 @@ class BinanceStreamClient(threading.Thread):
 
     def _build_connection_string(self):
         logger.info(f"Subscribing to streams {self._streams}")
+        base = (
+            WEBSOCKET_BASE_ENDPOINT
+            if not self._test_net
+            else WEBSOCKET_BASE_TEST_ENDPOINT
+        )
         if len(self._streams) == 1:
-            con_string = f"{WEBSOCKET_BASE_ENDPOINT}/ws/{self._streams[0]}"
+            con_string = f"{base}/ws/{self._streams[0]}"
         else:
-            con_string = (
-                f"{WEBSOCKET_BASE_ENDPOINT}/stream?streams={'/'.join(self._streams)}"
-            )
+            con_string = f"{base}/stream?streams={'/'.join(self._streams)}"
         return con_string
 
     def _build_unsubscription_string(self):
@@ -63,8 +66,15 @@ class BinanceStreamClient(threading.Thread):
         self._should_terminate = True
 
 
-# def something(msg):
-#     print(msg)
+def something(msg):
+    print(msg)
 
-# client = BinanceStreamClient(streams=["bnbbtc@trade"], on_message=something)
+
+# client = BinanceStreamClient(
+#     streams=["bnbbtc@trade", "btcusdt@trade",
+# "btcbusd@trade", "ltcbtc@trade", "trxbtc@trade",
+# "xrpbtc@trade", "ethbtc@trade"],
+#     on_message=something,
+#     test_net=True
+# )
 # client.start()
