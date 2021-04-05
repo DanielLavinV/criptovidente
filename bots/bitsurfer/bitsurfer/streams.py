@@ -91,9 +91,7 @@ class StreamsManager:
 
         def get_best_growers():
             logger.info("Getting best market growers...")
-            self.states["pairs"][:] = self.states["pairs"][
-                0:0
-            ]  # modify in place or else the link is broken between classes
+            self.states["pairs"] = self.states["pairs"][0:0]
             info = (
                 self.binance.market_data.twentyfourhour_ticker_price_change_statistics()
             )

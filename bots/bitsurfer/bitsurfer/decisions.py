@@ -58,7 +58,6 @@ class DecisionsManager:
                 logger.info(
                     f"More than one prediction exists for {row['pair']}. Skipping for decision..."
                 )
-            logger.info(f"predictionrepresents: \n{prediction.head()}")
             logger.info(
                 f"For {row['pair']} predicted a {prediction.reset_index()['represents'].iloc[0]} happening at {pd.to_datetime(prediction.reset_index()['ts'].iloc[0], unit='s')}"  # noqa: E501
             )
@@ -69,7 +68,6 @@ class DecisionsManager:
     def current_working_asset(self):
         logger.info(f"Current assets: {self.states['balances'].keys()}")
         base_assets = ["BTC"]  # For real network
-        # base_assets = ["BTC", "BNB", "BUSD", 'ETH', 'LTC', 'TRX', 'USDT', 'XRP']
         for asset in self.states[
             "balances"
         ].keys():  # wallet manager ensures only balances != 0 present

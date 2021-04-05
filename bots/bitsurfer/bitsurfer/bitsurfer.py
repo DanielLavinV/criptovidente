@@ -8,6 +8,7 @@ from wallet import WalletManager
 from streams import StreamsManager
 from decisions import DecisionsManager
 from orders import OrdersManager
+from math import floor
 import logging
 
 pd.set_option("display.float_format", "{:.10f}".format)
@@ -26,9 +27,9 @@ logger.addHandler(ch)
 class Bitsurfer(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
-        self._test_net = True
+        self._test_net = False
         self.binance = BinanceClient("/home/lavin/.binance/keys.json", self._test_net)
-        self._ops_frequency = 1
+        self._ops_frequency = 3
         self._ops_time_unit = "T"
         self._future_periods = 1
         self._prediction_results_df = pd.DataFrame(
@@ -73,27 +74,22 @@ class Bitsurfer(threading.Thread):
 
     def _drop_old_entries(self):
         logger.info("Cleaning up old entries from dataframes...")
-        self.states["trades"] = self.states["trades"][-5000:].reset_index(drop=True)
-        self.states["pred_results"] = self.states["pred_results"][-5000:].reset_index(
+        self.states["trades"] = self.states["trades"][-2000:].reset_index(drop=True)
+        self.states["pred_results"] = self.states["pred_results"][-2000:].reset_index(
             drop=True
         )
         self.states["pred_errors"] = self.states["pred_errors"].dropna()
-        self._messages = self._messages[-5000:]
+        self.states["messages"] = self.states["messages"][-2000:]
 
     def _get_old_periods(self):
         return self._ops_frequency * 4
 
     def run(self):
-        # logger.info(f"Pairs in main before streams refresh: {self.states['pairs']}")
         self.streams_manager.refresh()
-        # logger.info(f"Pairs in main after streams refresh: {self.states['pairs']}")
         logger.info("Streams initilization complete.")
-        # schedule.every(self._ops_frequency).minutes.do(
-        #     self.predictions_manager.run_prediction
-        # )
-        # This should be the final line
+        schedule.every(1).minutes.do(self.crunch_messages)
         schedule.every(self._ops_frequency).minutes.do(self.execution_cycle)
-        schedule.every(30).minutes.do(self.streams_manager.refresh)
+        schedule.every(10).minutes.do(self.streams_manager.refresh)
         schedule.every(self._get_old_periods()).minutes.do(self._drop_old_entries)
         while not self._should_terminate:
             schedule.run_pending()
@@ -113,6 +109,32 @@ class Bitsurfer(threading.Thread):
         else:
             logger.info(f"Decision: {decision}")
             self.orders_manager.test_order(decision)
+
+    def crunch_messages(self):
+        buffer_df = pd.DataFrame(columns=["ts", "price", "vol", "pair"])
+        crunch = self.states["messages"][:]
+        logger.info(f"Crunching {len(crunch)} messages.")
+        for i, m in enumerate(crunch):
+            try:
+                ts = float(floor(m["E"] / 1000))
+                price = float(m["p"])
+                vol = float(m["q"])
+                pair = m["s"]
+                buffer_df.loc[i] = [ts, price, vol, pair]
+            except KeyError as e:
+                logger.error(f"Key error for message {m}")
+        self.states["messages"] = [
+            m for m in self.states["messages"] if m not in crunch
+        ]
+        for pair in buffer_df.pair.unique():
+            pair_df = buffer_df[buffer_df["pair"] == pair].drop(columns="pair")
+            pair_df["datetime"] = pd.to_datetime(pair_df["ts"], unit="s")
+            pair_df = pair_df.set_index("datetime")
+            pair_df = pair_df.resample("1T").mean()
+            pair_df["pair"] = pair
+            self.states["trades"] = (
+                self.states["trades"].append(pair_df).reset_index(drop=True)
+            )
 
 
 if __name__ == "__main__":

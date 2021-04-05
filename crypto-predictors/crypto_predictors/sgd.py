@@ -69,7 +69,6 @@ class SGDPredictor:
         logger.info("SGD Model training complete.")
 
     def predict(self, df_test: pd.DataFrame, max_price: float, max_vol: float):
-        logger.info(f"Predicting for {df_test.shape[0]} datapoints.")
         df_test["datetime"] = pd.to_datetime(df_test["ts"], unit="s")
         df_test = df_test.set_index("datetime")
         ts_df = df_test[["ts"]].resample(self._batch_size).mean()

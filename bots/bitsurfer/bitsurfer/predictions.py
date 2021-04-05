@@ -1,6 +1,5 @@
 from crypto_predictors.sgd import SGDPredictor
 import logging
-from math import floor
 from datetime import timedelta
 import numpy as np
 
@@ -23,23 +22,12 @@ class PredictionsManager:
         )
 
     def run_prediction(self):
-        logger.info(f"Currently have {len(self.states['messages'])} messages.")
-        for i, m in enumerate(self.states["messages"]):
-            try:
-                ts = int(floor(m["E"] / 1000))
-                price = float(m["p"])
-                vol = float(m["q"])
-                pair = m["s"]
-                self.states["trades"].loc[i] = [ts, price, vol, pair]
-            except KeyError as e:
-                logger.error(f"Key error for message {m}")
-        # logger.info(f"PAIRS IN PRED MANAGER: {self.states["pairs"]}")
         for pair in self.states["pairs"]["pair"]:
             pair_df = (
                 self.states["trades"][self.states["trades"]["pair"] == pair]
                 .drop(columns=["pair"])
                 .reset_index(drop=True)
-                .astype(float)
+                # .astype(float)
             )
             ts_most_recent = max(pair_df["ts"]) - self._ops_frequency * 60 * 2
             most_recent_idx = pair_df[pair_df["ts"] > ts_most_recent].iloc[0].name
@@ -79,7 +67,7 @@ class PredictionsManager:
                 results[["ts", "prediction", "pair", "represents"]]
             )
 
-            logger.info(f"LATEST PREDICTION RESULTS {pair}: \n{results.tail(3)}")
+            # logger.info(f"LATEST PREDICTION RESULTS {pair}: \n{results.tail(3)}")
         self._calculate_prediction_errors()
 
     def _find_time_relevant_actual_and_predictions(self):
@@ -113,7 +101,6 @@ class PredictionsManager:
                 logger.info(f"Can't evaluate prediction performance for {pair}")
                 self.states["pred_errors"].loc[pair] = [float("nan"), float("nan")]
                 continue
-            logger.info(f"Calculating prediction error for {pair}")
             rmse, mae = self.predictor.calculate_errors(
                 actual_pair_df, predictions_pair_df
             )
