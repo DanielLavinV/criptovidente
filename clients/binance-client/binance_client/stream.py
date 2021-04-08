@@ -5,7 +5,7 @@ import threading
 # import orjson as json
 import json
 from typing import List, Callable, Any
-from constants import WEBSOCKET_BASE_ENDPOINT, WEBSOCKET_BASE_TEST_ENDPOINT
+from .constants import WEBSOCKET_BASE_ENDPOINT, WEBSOCKET_BASE_TEST_ENDPOINT
 import logging
 
 logger = logging.getLogger(__name__)

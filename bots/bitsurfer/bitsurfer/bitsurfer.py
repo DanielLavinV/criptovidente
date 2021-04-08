@@ -29,7 +29,7 @@ class Bitsurfer(threading.Thread):
         threading.Thread.__init__(self)
         self._test_net = False
         self.binance = BinanceClient("/home/lavin/.binance/keys.json", self._test_net)
-        self._ops_frequency = 3
+        self._ops_frequency = 1
         self._ops_time_unit = "T"
         self._future_periods = 1
         self._prediction_results_df = pd.DataFrame(
@@ -108,6 +108,7 @@ class Bitsurfer(threading.Thread):
             logger.info("Doin nothin.")
         else:
             logger.info(f"Decision: {decision}")
+            # self.orders_manager.create_orders(decision)
             self.orders_manager.test_order(decision)
 
     def crunch_messages(self):

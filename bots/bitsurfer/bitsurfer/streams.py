@@ -102,7 +102,7 @@ class StreamsManager:
                     float(ticker["priceChangePercent"]),
                 ]
             best_tickers_df = best_tickers_df[
-                best_tickers_df["symbol"].str.contains("BTC")
+                best_tickers_df["symbol"].str.endswith("BTC")
             ].sort_values(by="change_pct", ascending=False)
 
             for i, row in best_tickers_df.iterrows():

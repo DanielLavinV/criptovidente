@@ -4,6 +4,7 @@ from sklearn.linear_model import SGDRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 import os
 import logging
+from datetime import datetime as dtt
 
 pd.options.mode.chained_assignment = None
 
@@ -71,9 +72,24 @@ class SGDPredictor:
     def predict(self, df_test: pd.DataFrame, max_price: float, max_vol: float):
         df_test["datetime"] = pd.to_datetime(df_test["ts"], unit="s")
         df_test = df_test.set_index("datetime")
-        ts_df = df_test[["ts"]].resample(self._batch_size).mean()
-        price_df = df_test[["price"]].resample(self._batch_size).mean().fillna(0)
-        vol_df = df_test[["vol"]].resample(self._batch_size).sum().fillna(0)
+        now_dtt = dtt.now()
+        ts_df = (
+            df_test[["ts"]]
+            .resample(self._batch_size, label="right", origin=now_dtt)
+            .mean()
+        )
+        price_df = (
+            df_test[["price"]]
+            .resample(self._batch_size, label="right", origin=now_dtt)
+            .mean()
+            .fillna(0)
+        )
+        vol_df = (
+            df_test[["vol"]]
+            .resample(self._batch_size, label="right", origin=now_dtt)
+            .sum()
+            .fillna(0)
+        )
         resampled_test_df = pd.DataFrame(index=ts_df.index)
         resampled_test_df["price"] = price_df["price"].values / max_price
         resampled_test_df["vol"] = vol_df["vol"].values / max_vol

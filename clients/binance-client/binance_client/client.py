@@ -70,6 +70,8 @@ class BaseClient:
     def _resolve_optional_arguments(self, params: dict, **kwargs) -> dict:
         for arg, val in kwargs.items():
             if val:
+                if "qty" in arg.lower() or "quantity" in arg.lower():
+                    val = "{:.8f}".format(val)
                 params[arg] = val
         return params
 
@@ -557,8 +559,8 @@ class SpotAccountTradeClient(BaseClient):
     def query_order(
         self,
         symbol: str,
-        order_id: Optional[int],
-        orig_client_order_id: Optional[str],
+        order_id: Optional[int] = None,
+        orig_client_order_id: Optional[str] = None,
         recv_window: int = 5000,
     ) -> dict:
         params = {

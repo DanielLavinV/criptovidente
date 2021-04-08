@@ -29,14 +29,14 @@ class PredictionsManager:
                 .reset_index(drop=True)
                 # .astype(float)
             )
-            ts_most_recent = max(pair_df["ts"]) - self._ops_frequency * 60 * 2
+            ts_most_recent = max(pair_df["ts"]) - self._ops_frequency * 2 * 60
             most_recent_idx = pair_df[pair_df["ts"] > ts_most_recent].iloc[0].name
             if most_recent_idx == 0:
                 logger.info(f"Not enough data gathered to run prediction for {pair}")
                 continue
             if (
                 max(pair_df["ts"]) - pair_df.iloc[most_recent_idx]["ts"]
-            ) < self._ops_frequency * 60 * 2:
+            ) < self._ops_frequency * 2 * 60:
                 most_recent_idx -= 1
                 predict_df = pair_df.iloc[most_recent_idx:]
             else:
