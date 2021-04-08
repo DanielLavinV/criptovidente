@@ -3,9 +3,16 @@ name = "binance-client"
 version = "0.1.0"
 description = ""
 authors = ["Daniel Lavin <dlavinv64@hotmail.com>"]
+packages = [
+    { include = "binance_client" },
+    { include = "binance_client/**/*.py" },
+    { include = "binance_client/*.py" },
+]
 
 [tool.poetry.dependencies]
 python = "^3.8"
+orjson = "^3.5.0"
+websockets = "^8.1"
 
 [tool.poetry.dev-dependencies]
 
