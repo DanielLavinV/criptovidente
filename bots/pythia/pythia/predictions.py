@@ -1,15 +1,19 @@
 from crypto_predictors.sgd import SGDPredictor
 import logging
 from datetime import timedelta
+from datetime import datetime as dtt
+from math import floor
 import numpy as np
-
+import binance_client.constants as cts
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
 class PredictionsManager:
-    def __init__(self, ops_freq, future_periods, ops_time_unit, states):
+    def __init__(self, binance, ops_freq, future_periods, ops_time_unit, states):
+        self.binance = binance
         self._ops_frequency = ops_freq
         self._future_periods = future_periods
         self._ops_time_unit = ops_time_unit
@@ -21,8 +25,9 @@ class PredictionsManager:
             ops_time_unit=self._ops_time_unit,
         )
 
-    def run_prediction(self):
-        for pair in self.states["pairs"]["pair"]:
+    def build_realtime_prediction_df(self, pair: str) -> pd.DataFrame:
+        predict_df = None
+        if not self.states["trades"].empty:
             pair_df = (
                 self.states["trades"][self.states["trades"]["pair"] == pair]
                 .drop(columns=["pair"])
@@ -33,7 +38,7 @@ class PredictionsManager:
             most_recent_idx = pair_df[pair_df["ts"] > ts_most_recent].iloc[0].name
             if most_recent_idx == 0:
                 logger.info(f"Not enough data gathered to run prediction for {pair}")
-                continue
+                return predict_df
             if (
                 max(pair_df["ts"]) - pair_df.iloc[most_recent_idx]["ts"]
             ) < self._ops_frequency * 2 * 60:
@@ -41,6 +46,53 @@ class PredictionsManager:
                 predict_df = pair_df.iloc[most_recent_idx:]
             else:
                 predict_df = pair_df
+        return predict_df
+
+    def kline_prediction(self, pair: str) -> pd.DataFrame:
+        pair_df = pd.DataFrame(columns=["ts", "price", "vol", "pair"])
+        interval_dict = {
+            1: cts.KLINE_INTERVAL_MINUTES_1,
+            3: cts.KLINE_INTERVAL_MINUTES_3,
+            5: cts.KLINE_INTERVAL_MINUTES_5,
+            15: cts.KLINE_INTERVAL_MINUTES_15,
+            30: cts.KLINE_INTERVAL_MINUTES_30,
+            60: cts.KLINE_INTERVAL_HOURS_1,
+            120: cts.KLINE_INTERVAL_HOURS_2,
+        }
+        if self._ops_frequency not in interval_dict.keys():
+            logger.error(
+                f"Cannot perform auxiliary kline predictions: \
+                operation frequency ({self._ops_frequency}m) is not a valid kline interval."
+            )
+        start_time = (
+            floor(dtt.now().timestamp() - (self._ops_frequency * 4 * 60)) * 1000
+        )
+        kline_data = self.binance.market_data.kline_candlestick_data(
+            symbol=pair,
+            interval=interval_dict[self._ops_frequency],
+            start_time=start_time,
+            end_time=floor(dtt.now().timestamp()) * 1000,
+            limit=1000,
+        )["content"]
+        for i, kline in enumerate(kline_data):
+            close_time = kline[6] / 1000
+            average_price = (float(kline[2]) + float(kline[3])) / 2
+            volume = float(kline[5])
+            pair_df.loc[i] = [close_time, average_price, volume, pair]
+        return pair_df
+
+    def run_prediction(self):
+        for pair in self.states["pairs"]["pair"]:
+            predict_df = self.build_realtime_prediction_df(pair)
+            if predict_df is None:
+                logger.info(
+                    f"Not enough realtime data for {pair}.\
+                    Attempting to predict from klines..."
+                )
+                predict_df = self.kline_prediction(pair)
+                if predict_df is None or predict_df.empty:
+                    logger.error(f"Failed to kline-predict for {pair}")
+                    continue
             logging.info(f"Performing prediction for pair {pair}")
             results = self.predictor.predict(
                 df_test=predict_df,
@@ -84,7 +136,7 @@ class PredictionsManager:
         return predictions, actuals
 
     def _calculate_prediction_errors(self):
-        if self.states["pred_results"].empty:
+        if self.states["pred_results"].empty or self.states["trades"].empty:
             return
         predictions, actuals = self._find_time_relevant_actual_and_predictions()
         if predictions.empty or actuals.empty:

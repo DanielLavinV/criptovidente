@@ -5,6 +5,7 @@ import threading
 import time
 import schedule
 import logging
+from math import floor
 
 from predictions import PredictionsManager
 from wallet import WalletManager
@@ -23,7 +24,7 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 notifier = dn.Notifier(
-    "https://discord.com/api/webhooks/829733851798437970/EIIAHfucMPrmOJ3x3uTBY1ofCKvMhVQYVcDD4-OznIAwcq4qvHOjmjvoT9PdldDhcDNS"
+    "https://discord.com/api/webhooks/829733851798437970/EIIAHfucMPrmOJ3x3uTBY1ofCKvMhVQYVcDD4-OznIAwcq4qvHOjmjvoT9PdldDhcDNS"  # noqa: E501
 )
 
 
@@ -61,6 +62,7 @@ class Pythia(threading.Thread):
         }
         self._should_terminate = False
         self.predictions_manager = PredictionsManager(
+            binance=self.binance,
             ops_freq=self._ops_frequency,
             future_periods=self._future_periods,
             ops_time_unit=self._ops_time_unit,
@@ -86,15 +88,16 @@ class Pythia(threading.Thread):
         self.wallet_manager.update_balances()
         self.wallet_manager.fetch_trading_rules()
         self.streams_manager.acquire_targets()
-        # self.streams_manager.refresh()
-        # logger.info("Streams initilization complete.")
-        # schedule.every(1).minutes.do(self.crunch_messages)
-        # schedule.every(self._ops_frequency).minutes.do(self.execution_cycle)
-        # schedule.every(10).minutes.do(self.streams_manager.refresh)
-        # schedule.every(self._get_old_periods()).minutes.do(self._drop_old_entries)
-        # while not self._should_terminate:
-        #     schedule.run_pending()
-        #     time.sleep(1)
+        self.streams_manager.create_streams()
+        self.predictions_manager.run_prediction()
+        logger.info("Streams initilization complete.")
+        schedule.every(1).minutes.do(self.crunch_messages)
+        schedule.every(self._ops_frequency).minutes.do(self.execution_cycle)
+        schedule.every(10).minutes.do(self.streams_manager.refresh)
+        schedule.every(self._get_old_periods()).minutes.do(self._drop_old_entries)
+        while not self._should_terminate:
+            schedule.run_pending()
+            time.sleep(1)
 
     def stop(self):
         logger.info("Shutting down Pythia (TM)")
