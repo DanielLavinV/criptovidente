@@ -7,7 +7,7 @@ from binance_client.stream import BinanceStreamClient
 import json
 from typing import List
 
-MAX_TICKERS_TO_TRACK = 10
+MAX_TICKERS_TO_TRACK = 15
 WORKING_QUOTE_ASSET = "BTC"
 
 logger = logging.getLogger(__name__)
@@ -123,6 +123,7 @@ class StreamsManager:
         bg = self.get_best_growers()
         targets = self.compare_growers_and_balances(bg)
         refined_targets = self.get_max_pair_prices(targets)
+        # logger.info(f"MAX PAIR PRICES: \n{self.states['max_prices_vols']}")
         pairs_df = bg[bg["symbol"].isin(refined_targets)]
         pairs_df.columns = ["pair", "growth"]
         self.states["pairs"] = pairs_df

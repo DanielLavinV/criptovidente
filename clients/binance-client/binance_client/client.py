@@ -77,7 +77,11 @@ class BaseClient:
 
     def _send(self, req: Request) -> dict:
         logger.info(f"Reaching {req.url}")
-        response = self._session.send(req.prepare())
+        try:
+            response = self._session.send(req.prepare())
+        except Exception as e:
+            time.sleep(2)
+            return self._send(req)
         if self._parse_weight_response(response):
             return self._send(req)
         try:

@@ -65,7 +65,7 @@ class PredictionsManager:
                 operation frequency ({self._ops_frequency}m) is not a valid kline interval."
             )
         start_time = (
-            floor(dtt.now().timestamp() - (self._ops_frequency * 4 * 60)) * 1000
+            floor(dtt.now().timestamp() - (self._ops_frequency * 3 * 60)) * 1000
         )
         kline_data = self.binance.market_data.kline_candlestick_data(
             symbol=pair,
@@ -75,10 +75,12 @@ class PredictionsManager:
             limit=1000,
         )["content"]
         for i, kline in enumerate(kline_data):
-            close_time = kline[6] / 1000
+            # close_time = kline[6] / 1000 # close_time
+            close_time = kline[0] / 1000  # open_time
             average_price = (float(kline[2]) + float(kline[3])) / 2
             volume = float(kline[5])
             pair_df.loc[i] = [close_time, average_price, volume, pair]
+        # logger.info(f"KLINE PAIR DF: \n{pair_df.head(10)}")
         return pair_df
 
     def run_prediction(self):
@@ -110,13 +112,15 @@ class PredictionsManager:
                 + timedelta(minutes=self._ops_frequency * self._future_periods)
             ).values.astype(np.int64) // 10 ** 9
             results["pair"] = pair
-            results["represents"] = self._determine_represents(
+            represents, projection = self._determine_represents(
                 results[["price", f"prediction_t+{self._future_periods}"]]
             )
+            results["represents"] = represents
+            results["projection"] = projection
             last_idx = len(self.states["pred_results"])
             next_last_idx = last_idx + len(results)
             self.states["pred_results"] = self.states["pred_results"].append(
-                results[["ts", "prediction", "pair", "represents"]]
+                results[["ts", "prediction", "pair", "represents", "projection"]]
             )
 
             # logger.info(f"LATEST PREDICTION RESULTS {pair}: \n{results.tail(3)}")
@@ -163,11 +167,19 @@ class PredictionsManager:
 
     def _determine_represents(self, joint):
         represents = []
+        projection = []
         for i, row in joint.iterrows():
-            if row[f"prediction_t+{self._future_periods}"] > row["price"] * 1.00075:
+            if row[f"prediction_t+{self._future_periods}"] > row["price"] * 1.01:
                 represents.append("increase")
             elif row[f"prediction_t+{self._future_periods}"] < row["price"]:
                 represents.append("decrease")
             else:
                 represents.append("no_change")
-        return represents
+            projection.append(
+                (
+                    (row[f"prediction_t+{self._future_periods}"] - row["price"])
+                    / row["price"]
+                )
+                * 100
+            )
+        return represents, projection

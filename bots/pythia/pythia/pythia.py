@@ -1,5 +1,4 @@
 from binance_client.client import BinanceClient
-import discord_notify as dn
 import pandas as pd
 import threading
 import time
@@ -10,6 +9,7 @@ from math import floor
 from predictions import PredictionsManager
 from wallet import WalletManager
 from streams import StreamsManager
+from reports import ReportManager
 
 pd.set_option("display.float_format", "{:.10f}".format)
 logger = logging.getLogger()
@@ -23,16 +23,12 @@ ch.setFormatter(formatter)
 
 logger.addHandler(ch)
 
-notifier = dn.Notifier(
-    "https://discord.com/api/webhooks/829733851798437970/EIIAHfucMPrmOJ3x3uTBY1ofCKvMhVQYVcDD4-OznIAwcq4qvHOjmjvoT9PdldDhcDNS"  # noqa: E501
-)
-
 
 class Pythia(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
         self.binance = BinanceClient("/home/lavin/.binance/keys.json")
-        self._ops_frequency = 1
+        self._ops_frequency = 60
         self._ops_time_unit = "T"
         self._future_periods = 1
         self._prediction_results_df = pd.DataFrame(
@@ -41,6 +37,7 @@ class Pythia(threading.Thread):
                 "prediction",
                 "pair",
                 "represents",
+                "projection",
             ]  # "ts" references when the prediction WILL happen
         )
         self._trades_df = pd.DataFrame(columns=["ts", "price", "vol", "pair"])
@@ -70,6 +67,7 @@ class Pythia(threading.Thread):
         )
         self.wallet_manager = WalletManager(client=self.binance, states=self.states)
         self.streams_manager = StreamsManager(binance=self.binance, states=self.states)
+        self.report_manager = ReportManager(states=self.states)
         logger.info("Start-up complete.")
 
     def _drop_old_entries(self):
@@ -90,6 +88,7 @@ class Pythia(threading.Thread):
         self.streams_manager.acquire_targets()
         self.streams_manager.create_streams()
         self.predictions_manager.run_prediction()
+        self.report_manager.report()
         logger.info("Streams initilization complete.")
         schedule.every(1).minutes.do(self.crunch_messages)
         schedule.every(self._ops_frequency).minutes.do(self.execution_cycle)
@@ -107,6 +106,7 @@ class Pythia(threading.Thread):
     def execution_cycle(self):
         logger.info("Running execution cycle...")
         self.predictions_manager.run_prediction()
+        self.report_manager.report()
 
     def crunch_messages(self):
         buffer_df = pd.DataFrame(columns=["ts", "price", "vol", "pair"])

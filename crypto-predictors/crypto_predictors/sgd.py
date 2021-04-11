@@ -172,7 +172,7 @@ class SGDPredictor:
                 "Unable to calculate represents: no temporal intersection between predictions and real measurements."
             )
         for i, row in joint.iterrows():
-            if row["prediction"] > row["price"] * 1.00075:
+            if row["prediction"] > row["price"] * 1.05:
                 represents.append("increase")
             if row["prediction"] < row["price"]:
                 represents.append("decrease")
