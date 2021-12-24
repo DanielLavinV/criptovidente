@@ -21,99 +21,146 @@ class SGDPredictor:
         train_data_path: str,
         ops_time_unit: str,
         future_periods: int = 1,
+        past_periods: int = 2,
     ):
-        self.reggressor = SGDRegressor()
+        self.reggressors = {"avg_price": SGDRegressor(), "spread": SGDRegressor()}
         self._batch_size = f"{batch_size_mins}{ops_time_unit}"
         self._train_data_path = train_data_path
         self._future_periods = future_periods
+        self._past_periods = past_periods
         logger.info("Training SGD model...")
         self._train()
 
     def _train(self):
         for pair_csv in os.listdir(self._train_data_path):
             pair_path = self._train_data_path + pair_csv
-            df = pd.read_csv(pair_path, sep=",", names=["ts", "price", "vol"])
-            df["datetime"] = pd.to_datetime(df["ts"], unit="s")
-            df = df.set_index("datetime")
+            # df = pd.read_csv(pair_path, sep=",", names=["ts", "price", "vol"])
+            df = pd.read_csv(
+                pair_path,
+                sep=",",
+                names=[
+                    "ts",
+                    "open",
+                    "high",
+                    "low",
+                    "close",
+                    "volume",
+                    "quote_volume",
+                    "number_of_trades",
+                ],
+            )
             if df.empty:
                 continue
-            ts_df = df[["ts"]].resample(self._batch_size).mean()
-            price_df = df[["price"]].resample(self._batch_size).mean().fillna(0)
-            vol_df = df[["vol"]].resample(self._batch_size).sum().fillna(0)
+            df["datetime"] = pd.to_datetime(df["ts"], unit="ms")
+            df = df.set_index("datetime")
+            ts_df = df[["ts"]].resample(self._batch_size).first()
+            open_df = df[["open"]].resample(self._batch_size).first()
+            high_df = df[["high"]].resample(self._batch_size).max()
+            low_df = df[["low"]].resample(self._batch_size).min()
+            close_df = df[["close"]].resample(self._batch_size).last()
+            q_vol_df = df[["quote_volume"]].resample(self._batch_size).sum()
+            n_o_t_df = df[["number_of_trades"]].resample(self._batch_size).sum()
             resampled_df = pd.DataFrame(index=ts_df.index)
-            resampled_df["price"] = price_df["price"].values / max(
-                price_df["price"].values
+            max_price = max(high_df["high"].values)
+            resampled_df["open"] = open_df["open"].values / max_price
+            resampled_df["high"] = high_df["high"].values / max_price
+            resampled_df["low"] = low_df["low"].values / max_price
+            resampled_df["close"] = close_df["close"].values / max_price
+            resampled_df["quote_volume"] = q_vol_df["quote_volume"].values / max(
+                q_vol_df["quote_volume"].values
             )
-            resampled_df["vol"] = vol_df["vol"].values / max(vol_df["vol"].values)
-            resampled_df["price_t-1"] = resampled_df.shift(1)["price"]
-            resampled_df["price_t-2"] = resampled_df.shift(2)["price"]
-            resampled_df["vol_t-1"] = resampled_df.shift(1)["vol"]
-            resampled_df["vol_t-2"] = resampled_df.shift(2)["vol"]
-            resampled_df["target"] = resampled_df.shift(-self._future_periods)["price"]
-            resampled_df = resampled_df.loc[
-                (resampled_df[["price", "vol"]] != 0).any(axis=1)
-            ]
-            resampled_df = resampled_df.loc[
-                (resampled_df[["price_t-1", "vol_t-1"]] != 0).any(axis=1)
-            ]
-            resampled_df = resampled_df.loc[
-                (resampled_df[["price_t-2", "vol_t-2"]] != 0).any(axis=1)
-            ]
-            resampled_df = resampled_df.loc[(resampled_df[["target"]] != 0).any(axis=1)]
+            resampled_df["number_of_trades"] = n_o_t_df[
+                "number_of_trades"
+            ].values / max(n_o_t_df["number_of_trades"].values)
+            cols = resampled_df.columns[:]
+            for col in cols:
+                for i in range(1, self._past_periods + 1):
+                    resampled_df[f"{col}_t-{i}"] = resampled_df[col].shift(i)
+            resampled_df = resampled_df.dropna()
+            resampled_df["avg_price"] = (
+                resampled_df["open"]
+                + resampled_df["close"]
+                + resampled_df["low"]
+                + resampled_df["high"]
+            ) / 4
+            resampled_df["spread"] = resampled_df["high"] - resampled_df["low"]
+            resampled_df["target_avg_price"] = resampled_df["avg_price"].shift(
+                -self._future_periods
+            )
+            resampled_df["target_spread"] = resampled_df["spread"].shift(
+                -self._future_periods
+            )
             resampled_df = resampled_df.dropna()
             # TRAINING
-            features = resampled_df[
-                ["price", "vol", "price_t-1", "price_t-2", "vol_t-1", "vol_t-2"]
+            features = [
+                "open",
+                "close",
+                "low",
+                "high",
+                "quote_volume",
+                "number_of_trades",
             ]
-            target = resampled_df["target"]
-            self.reggressor.partial_fit(X=features, y=target)
+            features.extend([col for col in resampled_df.columns if "t-" in col])
+            features_df = resampled_df[features]
+            for target in ["avg_price", "spread"]:
+                target_df = resampled_df[f"target_{target}"]
+                try:
+                    self.reggressors[target].partial_fit(X=features_df, y=target_df)
+                except Exception as e:
+                    logger.info(f"Exception when training: {e}")
+                    print(e)
+                    print(f"PAIR: {pair_csv}, FEATURES:\n{features_df.head(20)}")
         logger.info("SGD Model training complete.")
 
-    def predict(self, df_test: pd.DataFrame, max_price: float, max_vol: float):
-        df_test["datetime"] = pd.to_datetime(df_test["ts"], unit="s")
-        df_test = df_test.set_index("datetime")
-        now_dtt = dtt.now()
-        ts_df = (
-            df_test[["ts"]]
-            .resample(self._batch_size, label="right", origin=now_dtt)
-            .mean()
+    def predict(
+        self, df: pd.DataFrame, max_price: float, max_quote_vol: float, max_not: int
+    ):
+        df["datetime"] = pd.to_datetime(df["ts"], unit="ms")
+        df = df.set_index("datetime")
+        ts_df = df[["ts"]].resample(self._batch_size).first()
+        open_df = df[["open"]].resample(self._batch_size).first()
+        high_df = df[["high"]].resample(self._batch_size).max()
+        low_df = df[["low"]].resample(self._batch_size).min()
+        close_df = df[["close"]].resample(self._batch_size).last()
+        q_vol_df = df[["quote_volume"]].resample(self._batch_size).sum()
+        n_o_t_df = df[["number_of_trades"]].resample(self._batch_size).sum()
+        resampled_df = pd.DataFrame(index=ts_df.index)
+        resampled_df["open"] = open_df["open"].values / max_price
+        resampled_df["high"] = high_df["high"].values / max_price
+        resampled_df["low"] = low_df["low"].values / max_price
+        resampled_df["close"] = close_df["close"].values / max_price
+        resampled_df["quote_volume"] = q_vol_df["quote_volume"].values / max_quote_vol
+        resampled_df["number_of_trades"] = n_o_t_df["number_of_trades"].values / max_not
+        cols = resampled_df.columns[:]
+        for col in cols:
+            for i in range(1, self._past_periods + 1):
+                resampled_df[f"{col}_t-{i}"] = resampled_df[col].shift(i)
+        resampled_df = resampled_df.dropna()
+        resampled_df["avg_price"] = (
+            resampled_df["open"]
+            + resampled_df["close"]
+            + resampled_df["low"]
+            + resampled_df["high"]
+        ) / 4
+        resampled_df["spread"] = resampled_df["high"] - resampled_df["low"]
+        resampled_df["target_avg_price"] = resampled_df["avg_price"].shift(
+            -self._future_periods
         )
-        price_df = (
-            df_test[["price"]]
-            .resample(self._batch_size, label="right", origin=now_dtt)
-            .mean()
-            .fillna(0)
+        resampled_df["target_spread"] = resampled_df["spread"].shift(
+            -self._future_periods
         )
-        vol_df = (
-            df_test[["vol"]]
-            .resample(self._batch_size, label="right", origin=now_dtt)
-            .sum()
-            .fillna(0)
-        )
-        resampled_test_df = pd.DataFrame(index=ts_df.index)
-        resampled_test_df["price"] = price_df["price"].values / max_price
-        resampled_test_df["vol"] = vol_df["vol"].values / max_vol
-        resampled_test_df = resampled_test_df.loc[
-            (resampled_test_df[["price", "vol"]] != 0).any(axis=1)
-        ]
-        resampled_test_df["price_t-1"] = resampled_test_df.shift(1)["price"]
-        resampled_test_df["price_t-2"] = resampled_test_df.shift(2)["price"]
-        resampled_test_df["vol_t-1"] = resampled_test_df.shift(1)["vol"]
-        resampled_test_df["vol_t-2"] = resampled_test_df.shift(2)["vol"]
-        actual_df = resampled_test_df[["price"]]
-        resampled_test_df = resampled_test_df.dropna()
-        features = resampled_test_df[
-            ["price", "vol", "price_t-1", "price_t-2", "vol_t-1", "vol_t-2"]
-        ]
-        if features.empty:
-            logger.error("Insufficient data gathered to run prediction.")
-            return None
-        predict_df = features
+        resampled_df = resampled_df.dropna()
+        features = ["open", "close", "low", "high", "quote_volume", "number_of_trades"]
+        features.extend([col for col in resampled_df.columns if "t-" in col])
+        predict_df = resampled_df[features]
         results = pd.DataFrame(index=predict_df.index)
-        results[f"prediction_t+{self._future_periods}"] = self.reggressor.predict(
-            X=predict_df
-        )
-        results["price"] = features["price"]
+        for target in ["avg_price", "spread"]:
+            results[f"pred_{target}_t+{self._future_periods}"] = self.reggressors[
+                target
+            ].predict(X=predict_df)
+            results[f"pred_{target}_t+{self._future_periods}"] = (
+                results[f"pred_{target}_t+{self._future_periods}"] * max_price
+            )
         return results
 
     def forge_joint_dataframe_for_errors(
@@ -172,7 +219,7 @@ class SGDPredictor:
                 "Unable to calculate represents: no temporal intersection between predictions and real measurements."
             )
         for i, row in joint.iterrows():
-            if row["prediction"] > row["price"] * 1.00075:
+            if row["prediction"] > row["price"] * 1.05:
                 represents.append("increase")
             if row["prediction"] < row["price"]:
                 represents.append("decrease")
