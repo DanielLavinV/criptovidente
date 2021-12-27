@@ -3,6 +3,8 @@
 *.pyc
 dist/*
 
+*.venv
+
 __pycache__
 
 clients/binance-client/binance_client/keys.json
