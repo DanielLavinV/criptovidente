@@ -1,8 +1,11 @@
 from client_utils.client import BaseClient
-from typing import Dict, Union, List
+from client_utils.signature_utils import sign_sha384
+from typing import Any, Dict, Union, List
 from .utils import *
 import json
 from .constants import *
+from datetime import datetime as dtt
+from math import floor
 
 
 class PublicEndpoints:
@@ -184,11 +187,25 @@ class PublicEndpoints:
 
 
 class PrivateEndpoints:
-    def __init__(self, client_id=None, client_secret=None) -> None:
-        pass
+    def __init__(self, client_id: str = None, client_secret: str = None) -> None:
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self._client = BaseClient('https://api-pub.bitfinex.com')
+
+    def _signed_post(self, path: str, body: Dict = None, headers: Dict[str, Any] = {}):
+        nonce = floor(dtt.now().timestamp() * 1000)
+        signature = f'/api{path}{nonce}{json.dumps(body) if body else ""}'
+        sig = sign_sha384(self._client_secret, signature)
+        headers['bfx-nonce'] = str(nonce)
+        headers['bfx-signature'] = sig
+        headers['bfx-apikey'] = self._client_id
+        return self._client.post(path=path, data=body, headers=headers)
 
     def wallets(self):
-        pass
+        res = self._signed_post(
+            path='/v2/auth/r/wallets',
+        )
+        return res
 
     def retrieve_orders(self):
         pass
@@ -291,3 +308,8 @@ class BitfinexRestClient:
     def __init__(self, client_id: str = None, client_secret: str = None) -> None:
         self.private = PrivateEndpoints(client_id, client_secret)
         self.public = PublicEndpoints()
+
+
+client = BitfinexRestClient(client_id="YOu4zqcDaMtcy1Z02G5WocZBosirK4QQcshnGNotvxP",
+                            client_secret="aImRGlQZk6F8m9kv7CrWkWKpkBmE8yGVLIcttgh8EG7")
+print(client.private.wallets())

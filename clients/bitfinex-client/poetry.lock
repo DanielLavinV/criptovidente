@@ -24,7 +24,7 @@ description = ""
 category = "main"
 optional = false
 python-versions = "^3.8"
-develop = true
+develop = false
 
 [package.dependencies]
 requests = "^2.26.0"
@@ -75,7 +75,7 @@ socks = ["PySocks (>=1.5.6,!=1.5.7,<2.0)"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "cdf48d54eda04b4e2fe41de800e63c1e793e3d8cc809728e5a6797e0465cced4"
+content-hash = "8c8be2d26521d7d3513e0ffc28ba2f2667d21b4144bae0dc98e1f04406a6708e"
 
 [metadata.files]
 certifi = [
